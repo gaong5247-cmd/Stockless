@@ -1,0 +1,117 @@
+name: Stockless Arena
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - arena/TRIGGER
+  workflow_dispatch:
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        opponent: [stockfish, reckless]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.opponent == 'reckless'
+
+      - name: Install opening generator dependency
+        run: python -m pip install --disable-pip-version-check chess
+
+      - name: Fetch Cute Chess 1.5.1
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 \
+            -o cutechess.AppImage \
+            https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+          "$CUTE" --version
+
+      - name: Generate legal paired openings
+        run: python tools/make_openings.py tests/opening_lines.txt tests/openings.epd
+
+      - name: Build Stockless
+        shell: bash
+        run: |
+          python tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          test -x build/stockless-src/src/stockless
+
+      - name: Build Stockfish opponent
+        if: matrix.opponent == 'stockfish'
+        shell: bash
+        run: |
+          make -C upstream/stockfish/src -j2 build ARCH=x86-64-avx2
+          test -x upstream/stockfish/src/stockfish
+
+      - name: Build Reckless opponent
+        if: matrix.opponent == 'reckless'
+        shell: bash
+        run: |
+          cd upstream/reckless
+          RUSTFLAGS="-C target-cpu=native" cargo build --release --no-default-features
+          mkdir -p ../../build
+          cp target/release/reckless ../../build/reckless
+          chmod +x ../../build/reckless
+          ../../build/reckless bench | tail -20
+
+      - name: Run 1200-game Stockfish vs Stockless match
+        if: matrix.opponent == 'stockfish'
+        shell: bash
+        run: |
+          mkdir -p results
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/upstream/stockfish/src/stockfish" Stockfish \
+            "$PWD/results/stockfish-vs-stockless.pgn" 1200 0.2+0.002 2 \
+            2>&1 | tee results/stockfish-vs-stockless.log
+          python tools/match_summary.py results/stockfish-vs-stockless.pgn Stockless \
+            | tee results/stockfish-vs-stockless-summary.txt
+
+      - name: Run 1200-game Reckless vs Stockless match
+        if: matrix.opponent == 'reckless'
+        shell: bash
+        run: |
+          mkdir -p results
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/build/reckless" Reckless \
+            "$PWD/results/reckless-vs-stockless.pgn" 1200 0.2+0.002 2 \
+            2>&1 | tee results/reckless-vs-stockless.log
+          python tools/match_summary.py results/reckless-vs-stockless.pgn Stockless \
+            | tee results/reckless-vs-stockless-summary.txt
+
+      - name: Add result to Actions summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## ${{ matrix.opponent }} vs Stockless" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat results/*summary.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arena-${{ matrix.opponent }}-vs-stockless
+          path: results/
+          if-no-files-found: warn
