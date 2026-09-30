@@ -32,11 +32,7 @@ struct SearchPolicy {
     int pressure = 0;
     int danger = 0;
     int volatility = 0;
-
-    // Negative means less reduction / deeper LMR search.
     int lmrAdjustment = 0;
-
-    // v0.4 Overdrive: temporarily relax Stockfish pruning in tactical nodes.
     int pruningDepthBoost = 0;
     int quietMoveAllowance = 0;
     int reSearchDepthBonus = 0;
@@ -52,26 +48,22 @@ inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
     int danger = in.threat.kingDanger;
     int volatility = in.threat.tacticalVolatility;
 
-    pressure += in.givesCheck ? 92 : 0;
-    pressure += in.capture ? 34 : 0;
-    pressure += in.ttPv ? 20 : 0;
-    pressure += in.pvNode ? 18 : 0;
+    pressure += in.givesCheck ? 84 : 0;
+    pressure += in.capture ? 30 : 0;
+    pressure += in.ttPv ? 18 : 0;
+    pressure += in.pvNode ? 14 : 0;
 
-    danger += in.inCheck ? 112 : 0;
-
-    // Reckless-style correction-history sensitivity.
+    danger += in.inCheck ? 108 : 0;
     volatility += (3 * in.correctionSignal) / 5;
 
     if (!in.improving)
-        volatility += 18;
-
+        volatility += 16;
     if (in.nextCutoffCount > 2)
-        volatility += 24;
+        volatility += 20;
 
-    // Do not waste nodes on late quiets unless the board itself is tactically hot.
     if (!in.capture && !in.givesCheck && in.moveCount > 8
-        && in.threat.tacticalVolatility < 128)
-        pressure -= 44;
+        && in.threat.tacticalVolatility < 144)
+        pressure -= 48;
 
     out.pressure   = std::clamp(pressure, 0, 256);
     out.danger     = std::clamp(danger, 0, 256);
@@ -81,43 +73,47 @@ inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
     const int tactical =
       std::clamp((3 * out.pressure + 2 * out.danger + 2 * out.volatility) / 7, 0, 256);
 
-    // v0.4 allows substantially more depth on desktop, while mobile remains conservative.
-    const int cap = mobile_profile() ? 384 : 768;
+    // Base hybrid: strong enough to matter, but still much cheaper than the
+    // broad v0.4 Overdrive experiment.
+    const int cap = mobile_profile() ? 320 : 640;
     int buyback = tactical * aggression * cap / (256 * 100);
 
-    if (in.givesCheck)
-        buyback += 96;
-
-    if (in.capture && out.pressure >= 160)
-        buyback += 64;
-
-    // Preserve Stockfish's defensive cut-node shape when the node is not forcing.
-    if (in.cutNode && !in.ttPv && !in.capture && !in.givesCheck && tactical < 144)
+    if (in.cutNode && !in.ttPv && !in.capture && !in.givesCheck && tactical < 152)
         buyback = std::max(0, buyback - 128);
 
     if (in.window <= 32 && (in.pvNode || in.ttPv))
-        buyback += 48;
+        buyback += 40;
 
-    out.lmrAdjustment = -std::min(cap, buyback);
-
+    // v0.5 Selective Overdrive:
+    // never loosen quiet pruning globally. Only verified forcing geometry gets
+    // the expensive treatment.
     if (overdrive_enabled() && !mobile_profile())
     {
-        // Boost the effective pruning depth. Larger lmrDepth means fewer
-        // futility/SEE prunes in Stockfish's Step 15.
-        out.pruningDepthBoost = tactical >= 144 ? 1 : 0;
-        if (tactical >= 216 && (in.givesCheck || in.capture || out.danger >= 192))
+        const bool forcingCheck = in.givesCheck && out.pressure >= 176;
+        const bool kingEmergency = out.danger >= 224;
+        const bool forcingCapture = in.capture && out.pressure >= 216 && tactical >= 192;
+
+        if (forcingCheck)
+            buyback += 160;
+        else if (forcingCapture || kingEmergency)
+            buyback += 96;
+
+        if ((forcingCheck || forcingCapture || kingEmergency) && tactical >= 192)
+            out.pruningDepthBoost = 1;
+
+        if (forcingCheck && tactical >= 232 && in.depth >= 6)
             out.pruningDepthBoost = 2;
 
-        // Give tactical quiet moves a few more slots before skip_quiet_moves().
-        if (!in.capture && !in.givesCheck)
-            out.quietMoveAllowance = tactical >= 176 ? 2 : tactical >= 128 ? 1 : 0;
+        // No general late-quiet expansion: v0.4 testing showed it wastes nodes.
+        out.quietMoveAllowance = 0;
 
-        // If an LMR probe already fails high, forcing/high-volatility moves
-        // deserve one extra full-depth verification ply.
-        if ((in.givesCheck || in.capture || in.pvNode) && tactical >= 192)
+        if (forcingCheck && tactical >= 208)
+            out.reSearchDepthBonus = 1;
+        else if (forcingCapture && tactical >= 232 && in.pvNode)
             out.reSearchDepthBonus = 1;
     }
 
+    out.lmrAdjustment = -std::min(cap + (overdrive_enabled() ? 192 : 0), buyback);
     return out;
 }
 
