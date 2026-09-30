@@ -50,7 +50,7 @@ def materialize(out: Path) -> None:
 
     shutil.copytree(UPSTREAM, out, ignore=shutil.ignore_patterns(".git"))
 
-    target_overlay = out / "src" / "stockless"
+    target_overlay = out / "src" / "stockless_core"
     shutil.copytree(OVERLAY, target_overlay)
 
     search_cpp = out / "src" / "search.cpp"
@@ -61,7 +61,7 @@ def materialize(out: Path) -> None:
     replace_once(
         search_cpp,
         '#include "search.h"\n',
-        '#include "search.h"\n#include "stockless/search_policy.h"\n#include "stockless/threat_signal.h"\n',
+        '#include "search.h"\n#include "stockless_core/search_policy.h"\n#include "stockless_core/threat_signal.h"\n',
     )
 
     node_anchor = """    MovePicker mp(pos, ttData.move, depth, &mainHistory, &lowPlyHistory, &captureHistory, contHist,
@@ -105,7 +105,7 @@ def materialize(out: Path) -> None:
     replace_once(
         engine_cpp,
         '#include "search.h"\n',
-        '#include "search.h"\n#include "stockless/config.h"\n',
+        '#include "search.h"\n#include "stockless_core/config.h"\n',
     )
 
     option_anchor = '    options.add("UCI_ShowWDL", Option(false));\n'
