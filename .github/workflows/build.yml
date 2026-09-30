@@ -1,0 +1,53 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Materialize Stockless
+        run: python tools/materialize.py
+      - name: Build
+        run: make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+      - name: UCI smoke
+        shell: bash
+        run: |
+          BIN=$(find build/stockless-src/src -maxdepth 1 -type f -name 'stockfish*' -perm -111 | head -1)
+          test -n "$BIN"
+          printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nisready\nquit\n' | "$BIN" | tee uci.txt
+          grep -q 'option name StocklessHybrid' uci.txt
+          grep -q 'uciok' uci.txt
+          grep -q 'readyok' uci.txt
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Materialize Stockless
+        run: python tools/materialize.py
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            curl
+            mingw-w64-ucrt-x86_64-gcc
+      - name: Build
+        shell: msys2 {0}
+        run: make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2 COMP=mingw

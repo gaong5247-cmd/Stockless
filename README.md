@@ -1,53 +1,93 @@
 # Stockless
 
-Stockless is an experimental chess-engine research project that combines a **Stockfish-derived C++ search/runtime base** with selectively ported **Reckless search and NNUE ideas**.
+**Stockless = Stockfish backbone + deliberately ported Reckless ideas + a separate Stockless hybrid policy.**
 
-The project deliberately does **not** blend both engines blindly. Responsibilities are separated so every hybrid change can be benchmarked, reverted, and SPRT-tested.
+The project does not blindly average two engines. Upstream code is pinned as submodules so attribution, updates, experiments and regressions stay traceable.
 
-## Architecture
+## Current role split
 
-| Layer | Primary source | Role |
-|---|---|---|
-| Board / movegen / UCI / SMP / TT / Syzygy | Stockfish | Stable runtime and search backbone |
-| Main NNUE evaluation | Stockfish | Baseline evaluation and accumulator path |
-| Tactical search ideas | Reckless -> ported to C++ | Threat-aware reductions, pruning and move ordering experiments |
-| Threat NNUE research | Reckless reference implementation | Threat features / accumulator ideas, not executed directly by the C++ engine |
-| Hybrid policy | Stockless | Chooses how aggressively search reductions/pruning should react to tactical volatility |
+| Component | Owner |
+|---|---|
+| Board, movegen, UCI, SMP, TT, Syzygy | Stockfish |
+| Primary centipawn NNUE evaluation | Stockfish |
+| Threat-NNUE/search reference implementation | Reckless |
+| Aggression / danger search controller | Stockless |
+| Experimental LMR adaptation | Stockless |
 
-## Repository layout
+Pinned revisions are documented in `docs/UPSTREAM.md`.
 
-- `src/` — buildable Stockfish-derived C++ engine core.
-- `src/stockless/` — Stockless-only hybrid search policy.
-- `vendor/reckless/` — upstream Reckless source snapshot kept for attribution and porting/reference.
-- `docs/ARCHITECTURE.md` — role boundaries and porting plan.
-- `docs/UPSTREAM.md` — exact upstream revisions used.
-
-## Phase 0
-
-The first phase keeps Stockfish behavior unchanged by default. Stockless-specific policy is introduced behind an isolated controller before it is wired into pruning/reduction decisions.
-
-Planned sequence:
-
-1. Baseline build + bench signature.
-2. Add cheap tactical-pressure features.
-3. Wire pressure into LMR only.
-4. Test.
-5. Wire pressure into pruning only.
-6. Test.
-7. Prototype NNUE-derived attack/danger signals.
-8. Train a dedicated Stockless network only after search-side gains are measurable.
-
-## Build
-
-From `src/`:
+## Clone
 
 ```bash
-make -j build ARCH=x86-64-avx2
-./stockfish bench
+git clone --recurse-submodules https://github.com/gaong5247-cmd/Stockless.git
+cd Stockless
 ```
 
-The binary will be renamed to Stockless as the integration layer lands.
+If already cloned:
+
+```bash
+git submodule update --init --recursive
+```
+
+## Build on Windows
+
+With Python + GNU make/MinGW available:
+
+```powershell
+./scripts/build-windows.ps1
+```
+
+The script materializes a clean Stockfish working tree under `build/stockless-src/`, overlays the Stockless code, applies guarded integration edits, and builds it.
+
+Manual flow:
+
+```bash
+python tools/materialize.py
+make -C build/stockless-src/src -j build ARCH=x86-64-avx2
+```
+
+## Experimental UCI options
+
+The hybrid controller is **OFF by default**, so the first baseline stays Stockfish-equivalent apart from integration plumbing.
+
+```text
+setoption name StocklessHybrid value true
+setoption name StocklessAggression value 100
+```
+
+`StocklessAggression` accepts 0..200.
+
+Phase 1 only buys back a small amount of LMR depth in forcing/tactically unstable situations. It does not alter the NNUE centipawn score.
+
+## NNUE plan
+
+Current upstream nets:
+
+- Stockfish: `nn-134a887f4c8f.nnue`
+- Reckless: `v60-7f587dfb.nnue`
+
+Run:
+
+```powershell
+./scripts/fetch-networks.ps1
+```
+
+The long-term plan is **not** to evaluate two full networks on every node. Reckless' threat-feature design is used as research input for an eventual Stockless auxiliary attack/danger signal and, if testing supports it, a unified multi-head net.
+
+See `docs/NNUE_PLAN.md`.
+
+## Testing rule
+
+Every change should be isolated:
+
+1. baseline bench
+2. one search idea
+3. bench / correctness
+4. game test / SPRT
+5. keep or revert
+
+No giant untestable "engine soup" commits.
 
 ## Licensing
 
-Stockfish is GPL-3.0-or-later. Reckless is AGPL-3.0. Upstream notices and license texts are retained. Code copied or ported from Reckless must continue to satisfy the AGPL-3.0 terms; combined distribution must preserve the applicable copyleft obligations.
+Stockfish is GPL-3.0-or-later. Reckless is AGPL-3.0. Their original repositories and license terms remain attached through the pinned submodules. Any copied/ported Reckless-derived code must satisfy its AGPL obligations.
