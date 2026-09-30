@@ -1,0 +1,88 @@
+name: v0.4 Overdrive Sweep
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - arena/V04_SWEEP
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - name: baseline100
+            aggression: 100
+            overdrive: false
+            threats: true
+          - name: overdrive100
+            aggression: 100
+            overdrive: true
+            threats: true
+          - name: overdrive112
+            aggression: 112
+            overdrive: true
+            threats: true
+          - name: overdrive125
+            aggression: 125
+            overdrive: true
+            threats: true
+          - name: overdrive150
+            aggression: 150
+            overdrive: true
+            threats: true
+          - name: lmr125_noThreats
+            aggression: 125
+            overdrive: false
+            threats: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencies
+        run: python -m pip install --disable-pip-version-check chess
+      - name: Cute Chess
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - name: Openings
+        run: python tools/make_openings.py tests/opening_lines.txt tests/openings.epd
+      - name: Build engines
+        shell: bash
+        run: |
+          python tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          make -C upstream/stockfish/src -j2 build ARCH=x86-64-avx2
+      - name: Run 500 games
+        shell: bash
+        env:
+          STOCKLESS_AGGRESSION: ${{ matrix.aggression }}
+          STOCKLESS_OVERDRIVE: ${{ matrix.overdrive }}
+          STOCKLESS_THREATS: ${{ matrix.threats }}
+        run: |
+          mkdir -p results
+          OUT="$PWD/results/${{ matrix.name }}.pgn"
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/upstream/stockfish/src/stockfish" Stockfish "$OUT" 500 0.2+0.002 2 \
+            2>&1 | tee "results/${{ matrix.name }}.log"
+          python tools/match_summary.py "$OUT" Stockless | tee "results/${{ matrix.name }}-summary.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v04-${{ matrix.name }}
+          path: results/
+          if-no-files-found: warn
