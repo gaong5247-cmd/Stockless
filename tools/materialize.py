@@ -8,11 +8,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = ROOT / "upstream" / "stockfish"
+RECKLESS = ROOT / "upstream" / "reckless"
 OVERLAY = ROOT / "src" / "stockless"
 DEFAULT_OUT = ROOT / "build" / "stockless-src"
 
 STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
-RECKLESS_SHA = "31d9cd6fd2bea6d9f72eeb35e0bac70daa295fb1"
+RECKLESS_SHA = "7300f044812d80397960e3a27a4f085e9487419a"
+STOCKLESS_VERSION = "0.3-dev"
 
 
 def replace_once(path: Path, old: str, new: str) -> None:
@@ -24,70 +26,81 @@ def replace_once(path: Path, old: str, new: str) -> None:
 
 
 def ensure_submodules() -> None:
-    if (UPSTREAM / "src" / "search.cpp").exists():
+    if (UPSTREAM / "src" / "search.cpp").exists() and (RECKLESS / "src" / "search.rs").exists():
         return
-    subprocess.run(
-        ["git", "submodule", "update", "--init", "--recursive"],
-        cwd=ROOT,
-        check=True,
-    )
+    subprocess.run(["git", "submodule", "update", "--init", "--recursive"], cwd=ROOT, check=True)
 
 
-def verify_pin() -> None:
-    actual = subprocess.check_output(
-        ["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"],
-        text=True,
-    ).strip()
-    if actual != STOCKFISH_SHA:
+def verify_pin(path: Path, expected: str, label: str) -> None:
+    actual = subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
+    if actual != expected:
         raise RuntimeError(
-            f"Stockfish submodule is {actual}, expected pinned {STOCKFISH_SHA}. "
+            f"{label} submodule is {actual}, expected pinned {expected}. "
             "Update docs/UPSTREAM.md and patch anchors before changing the pin."
         )
 
 
 def materialize(out: Path) -> None:
     ensure_submodules()
-    verify_pin()
+    verify_pin(UPSTREAM, STOCKFISH_SHA, "Stockfish")
+    verify_pin(RECKLESS, RECKLESS_SHA, "Reckless")
 
     if out.exists():
         shutil.rmtree(out)
 
-    shutil.copytree(
-        UPSTREAM,
-        out,
-        ignore=shutil.ignore_patterns(".git"),
-    )
+    shutil.copytree(UPSTREAM, out, ignore=shutil.ignore_patterns(".git"))
 
     target_overlay = out / "src" / "stockless"
     shutil.copytree(OVERLAY, target_overlay)
 
     search_cpp = out / "src" / "search.cpp"
     engine_cpp = out / "src" / "engine.cpp"
+    misc_cpp = out / "src" / "misc.cpp"
+    makefile = out / "src" / "Makefile"
 
     replace_once(
         search_cpp,
         '#include "search.h"\n',
-        '#include "search.h"\n#include "stockless/search_policy.h"\n',
+        '#include "search.h"\n#include "stockless/search_policy.h"\n#include "stockless/threat_signal.h"\n',
     )
 
-    reduction_anchor = "        int r = reduction(improving, depth, moveCount, delta);\n"
-    reduction_patch = reduction_anchor + """
+    node_anchor = """    MovePicker mp(pos, ttData.move, depth, &mainHistory, &lowPlyHistory, &captureHistory, contHist,
+                  &sharedHistory, ss->ply);
+"""
+    node_patch = """    const auto stocklessThreat =
+      Stockless::compute_threat_signal(pos, int(depth), ss->ttPv || PvNode || depth >= 8);
+
+""" + node_anchor
+    replace_once(search_cpp, node_anchor, node_patch)
+
+    lmr_anchor = """        // Apply the computed LMR
+        if (depth >= 2 && moveCount > 1)
+"""
+    lmr_patch = """        const int stocklessCorrectionSignal =
+          std::min(256, int(std::abs(correctionValue) / 131072));
+
         const auto stocklessPolicy = Stockless::make_search_policy({
           int(depth),
           moveCount,
-          delta,
+          int(beta - alpha),
           ss->staticEval == VALUE_NONE ? 0 : int(ss->staticEval),
           int(alpha),
           int(beta),
+          stocklessCorrectionSignal,
+          int((ss + 1)->cutoffCnt),
           improving,
           capture,
           givesCheck,
           ss->inCheck,
           ss->ttPv,
+          PvNode,
+          cutNode,
+          stocklessThreat,
         });
         r += stocklessPolicy.lmrAdjustment;
-"""
-    replace_once(search_cpp, reduction_anchor, reduction_patch)
+
+""" + lmr_anchor
+    replace_once(search_cpp, lmr_anchor, lmr_patch)
 
     replace_once(
         engine_cpp,
@@ -98,7 +111,7 @@ def materialize(out: Path) -> None:
     option_anchor = '    options.add("UCI_ShowWDL", Option(false));\n'
     option_patch = option_anchor + """
     options.add(
-      "StocklessHybrid", Option(false, [](const Option& o) {
+      "StocklessHybrid", Option(true, [](const Option& o) {
           Stockless::set_hybrid_enabled(bool(o));
           return std::nullopt;
       }));
@@ -108,12 +121,39 @@ def materialize(out: Path) -> None:
           Stockless::set_hybrid_aggression(int(o));
           return std::nullopt;
       }));
+
+    options.add(
+      "StocklessThreats", Option(true, [](const Option& o) {
+          Stockless::set_threats_enabled(bool(o));
+          return std::nullopt;
+      }));
+
+    options.add(
+      "StocklessMobile", Option(Stockless::default_mobile_profile(), [](const Option& o) {
+          Stockless::set_mobile_profile(bool(o));
+          return std::nullopt;
+      }));
 """
     replace_once(engine_cpp, option_anchor, option_patch)
 
+    replace_once(
+        misc_cpp,
+        '    ss << "Stockfish " << version << std::setfill(\'0\');\n',
+        '    ss << "Stockless 0.3" << std::setfill(\'0\');\n',
+    )
+    replace_once(
+        misc_cpp,
+        '         + "the Stockfish developers (see AUTHORS file)";\n',
+        '         + "Stockless contributors; based on Stockfish and Reckless";\n',
+    )
+
+    replace_once(makefile, "\tEXE = stockfish.exe\n", "\tEXE = stockless.exe\n")
+    replace_once(makefile, "\tEXE = stockfish.js\n", "\tEXE = stockless.js\n")
+    replace_once(makefile, "\tEXE = stockfish\n", "\tEXE = stockless\n")
+
     marker = out / "STOCKLESS_MATERIALIZED.txt"
     marker.write_text(
-        "Generated by tools/materialize.py\n"
+        f"Stockless: {STOCKLESS_VERSION}\n"
         f"Stockfish: {STOCKFISH_SHA}\n"
         f"Reckless reference: {RECKLESS_SHA}\n",
         encoding="utf-8",
