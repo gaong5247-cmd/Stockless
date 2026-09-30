@@ -10,7 +10,7 @@ Stockless uses pinned upstream repositories as Git submodules.
 
 ## Reckless
 - Repository: codedeliveryservice/Reckless
-- Pinned revision: 31d9cd6fd2bea6d9f72eeb35e0bac70daa295fb1
+- Pinned revision: 7300f044812d80397960e3a27a4f085e9487419a
 - License: GNU AGPL v3
 - Role: search and threat-NNUE reference source for deliberate Stockless ports.
 
