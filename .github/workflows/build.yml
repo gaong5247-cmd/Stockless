@@ -22,10 +22,13 @@ jobs:
       - name: UCI smoke
         shell: bash
         run: |
-          BIN=$(find build/stockless-src/src -maxdepth 1 -type f -name 'stockfish*' -perm -111 | head -1)
-          test -n "$BIN"
-          printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nisready\nquit\n' | "$BIN" | tee uci.txt
+          BIN=build/stockless-src/src/stockless
+          test -x "$BIN"
+          printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nsetoption name StocklessThreats value true\nsetoption name StocklessMobile value false\nisready\nquit\n' | "$BIN" | tee uci.txt
+          grep -q 'id name Stockless 0.3' uci.txt
           grep -q 'option name StocklessHybrid' uci.txt
+          grep -q 'option name StocklessThreats' uci.txt
+          grep -q 'option name StocklessMobile' uci.txt
           grep -q 'uciok' uci.txt
           grep -q 'readyok' uci.txt
 
@@ -51,3 +54,62 @@ jobs:
       - name: Build
         shell: msys2 {0}
         run: make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2 COMP=mingw
+      - name: Verify binary
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "build/stockless-src/src/stockless.exe")) {
+            throw "stockless.exe was not built"
+          }
+
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            arch: armv8
+            compiler: aarch64-linux-android26-clang++
+          - abi: armeabi-v7a
+            arch: armv7-neon
+            compiler: armv7a-linux-androideabi26-clang++
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK r27c
+        shell: bash
+        run: yes | sdkmanager "ndk;27.2.12479018"
+      - name: Materialize Stockless
+        run: python tools/materialize.py
+      - name: Build DroidFish engine
+        shell: bash
+        run: |
+          export NDK="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+          export PATH="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          make -C build/stockless-src/src -j2 build \
+            ARCH=\${{ matrix.arch }} COMP=ndk COMPCXX=\${{ matrix.compiler }}
+          mkdir -p dist
+          cp build/stockless-src/src/stockless "dist/stockless-0.3-\${{ matrix.abi }}"
+          chmod +x "dist/stockless-0.3-\${{ matrix.abi }}"
+          file "dist/stockless-0.3-\${{ matrix.abi }}"
+          llvm-readelf -h "dist/stockless-0.3-\${{ matrix.abi }}" | tee "dist/elf-\${{ matrix.abi }}.txt"
+      - name: Verify ABI
+        shell: bash
+        run: |
+          if [ "\${{ matrix.abi }}" = "arm64-v8a" ]; then
+            grep -Eq 'AArch64|ARM aarch64' "dist/elf-\${{ matrix.abi }}.txt"
+          else
+            grep -Eq 'ARM' "dist/elf-\${{ matrix.abi }}.txt"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-0.3-DroidFish-\${{ matrix.abi }}
+          path: |
+            dist/stockless-0.3-\${{ matrix.abi }}
+            dist/elf-\${{ matrix.abi }}.txt
+          if-no-files-found: error
