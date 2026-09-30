@@ -1,0 +1,86 @@
+name: Stockless v0.4 Tuning Sweep
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - arena/TUNING_SWEEP
+
+jobs:
+  aggression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        aggression: [96, 112, 128, 144]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencies
+        run: python -m pip install --disable-pip-version-check chess
+
+      - name: Fetch Cute Chess 1.5.1
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+
+      - name: Generate openings
+        run: python tools/make_openings.py tests/opening_lines.txt tests/openings.epd
+
+      - name: Build Stockless
+        shell: bash
+        run: |
+          python tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          test -x build/stockless-src/src/stockless
+
+      - name: Build Stockfish
+        shell: bash
+        run: |
+          make -C upstream/stockfish/src -j2 build ARCH=x86-64-avx2
+          test -x upstream/stockfish/src/stockfish
+
+      - name: Run 600 games
+        shell: bash
+        env:
+          STOCKLESS_AGGRESSION: ${{ matrix.aggression }}
+          STOCKLESS_OVERDRIVE: "true"
+          STOCKLESS_THREATS: "true"
+          STOCKLESS_MOBILE: "false"
+        run: |
+          mkdir -p results
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/upstream/stockfish/src/stockfish" Stockfish \
+            "$PWD/results/agg-${{ matrix.aggression }}.pgn" 600 0.2+0.002 2 \
+            2>&1 | tee "results/agg-${{ matrix.aggression }}.log"
+          python tools/match_summary.py "results/agg-${{ matrix.aggression }}.pgn" Stockless \
+            | tee "results/agg-${{ matrix.aggression }}-summary.txt"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: cat results/*summary.txt 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v04-aggression-${{ matrix.aggression }}
+          path: results/
+          if-no-files-found: warn
