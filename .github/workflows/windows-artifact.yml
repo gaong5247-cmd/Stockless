@@ -1,0 +1,96 @@
+name: Windows Download Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - arena/WINDOWS_ARTIFACT
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Materialize Stockless
+        run: python tools/materialize.py
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            curl
+            mingw-w64-ucrt-x86_64-gcc
+
+      - name: Build AVX2
+        shell: msys2 {0}
+        run: |
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2 COMP=mingw
+          mkdir -p dist
+          cp build/stockless-src/src/stockless.exe dist/stockless-0.5-windows-avx2.exe
+
+      - name: Build portable x86-64
+        shell: msys2 {0}
+        run: |
+          make -C build/stockless-src/src clean
+          make -C build/stockless-src/src -j2 build ARCH=x86-64 COMP=mingw
+          cp build/stockless-src/src/stockless.exe dist/stockless-0.5-windows-x86-64.exe
+
+      - name: UCI smoke test
+        shell: pwsh
+        run: |
+          $cmds = "uci`nsetoption name StocklessHybrid value true`nsetoption name StocklessAggression value 145`nsetoption name StocklessThreats value true`nsetoption name StocklessOverdrive value true`nisready`nquit`n"
+          $cmds | & ".\dist\stockless-0.5-windows-avx2.exe" | Tee-Object -FilePath ".\dist\uci-smoke.txt"
+          $text = Get-Content ".\dist\uci-smoke.txt" -Raw
+          if ($text -notmatch "id name Stockless 0.5") { throw "wrong engine id" }
+          if ($text -notmatch "uciok") { throw "uci failed" }
+          if ($text -notmatch "readyok") { throw "isready failed" }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Copy-Item LICENSE dist\LICENSE.txt
+          Copy-Item NOTICE.md dist\NOTICE.md
+          @'
+          Stockless 0.5-dev - Windows
+
+          Included:
+          - stockless-0.5-windows-avx2.exe       Recommended on modern CPUs with AVX2
+          - stockless-0.5-windows-x86-64.exe     More compatible fallback
+
+          Current stable defaults:
+          StocklessHybrid = true
+          StocklessAggression = 100
+          StocklessThreats = true
+          StocklessOverdrive = false
+          StocklessMobile = false
+
+          Experimental match-tested profile:
+          StocklessHybrid = true
+          StocklessAggression = 145
+          StocklessThreats = true
+          StocklessOverdrive = true
+          StocklessMobile = false
+
+          Note: 145 + Overdrive is experimental. Short-run testing showed positive results,
+          but longer testing is still needed before treating it as a proven Elo gain.
+
+          UCI engine: add the .exe to your chess GUI and edit the UCI options there.
+          '@ | Set-Content -Encoding UTF8 dist\README-WINDOWS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-0.5-Windows
+          path: dist/
+          if-no-files-found: error
+          retention-days: 90
