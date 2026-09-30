@@ -80,10 +80,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: android-actions/setup-android@v3
       - name: Install NDK r27c
         shell: bash
-        run: yes | sdkmanager "ndk;27.2.12479018"
+        run: |
+          yes | sdkmanager "ndk;27.2.12479018"
+          test -d "$ANDROID_SDK_ROOT/ndk/27.2.12479018"
       - name: Materialize Stockless
         run: python tools/materialize.py
       - name: Build DroidFish engine
