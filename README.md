@@ -1,20 +1,37 @@
 # Stockless
 
-**Stockless = Stockfish backbone + deliberately ported Reckless ideas + a separate Stockless hybrid policy.**
+**Stockless = Stockfish's stable C++ backbone + selectively ported Reckless ideas + a separate Stockless hybrid search policy.**
 
-The project does not blindly average two engines. Upstream code is pinned as submodules so attribution, updates, experiments and regressions stay traceable.
+Current development line: **v0.3-dev**
 
-## Current role split
+## Current architecture
 
 | Component | Owner |
 |---|---|
-| Board, movegen, UCI, SMP, TT, Syzygy | Stockfish |
-| Primary centipawn NNUE evaluation | Stockfish |
-| Threat-NNUE/search reference implementation | Reckless |
-| Aggression / danger search controller | Stockless |
-| Experimental LMR adaptation | Stockless |
+| Board / movegen / UCI / SMP / TT / Syzygy | Stockfish |
+| Primary NNUE centipawn evaluation | Stockfish |
+| LMR/correction-history research source | Reckless 0.10-dev |
+| Threat-NNUE research source | Reckless 0.10-dev |
+| Hybrid depth controller | Stockless |
+| Android mobile profile | Stockless |
 
 Pinned revisions are documented in `docs/UPSTREAM.md`.
+
+## What changed
+
+### v0.2
+- Hybrid adjustment moved to the **end of Stockfish's LMR calculation**.
+- Reckless-style correction-history sensitivity is folded into a bounded Stockless signal.
+- Cut nodes remain conservative unless the move/position is tactically forcing.
+
+### v0.3
+- Adds lightweight:
+  - `AttackPressure`
+  - `KingDanger`
+  - `TacticalVolatility`
+- These are computed from Stockfish attack maps and feed search depth decisions.
+- No second full NNUE is evaluated at every node.
+- Android builds automatically enable a lower-cost mobile search profile.
 
 ## Clone
 
@@ -31,63 +48,69 @@ git submodule update --init --recursive
 
 ## Build on Windows
 
-With Python + GNU make/MinGW available:
-
 ```powershell
 ./scripts/build-windows.ps1
 ```
 
-The script materializes a clean Stockfish working tree under `build/stockless-src/`, overlays the Stockless code, applies guarded integration edits, and builds it.
-
-Manual flow:
+Or:
 
 ```bash
 python tools/materialize.py
 make -C build/stockless-src/src -j build ARCH=x86-64-avx2
 ```
 
-## Experimental UCI options
+The generated binary is named `stockless` / `stockless.exe`.
 
-The hybrid controller is **OFF by default**, so the first baseline stays Stockfish-equivalent apart from integration plumbing.
+## DroidFish / Android
+
+GitHub Actions builds:
+
+- `stockless-0.3-arm64-v8a`
+- `stockless-0.3-armeabi-v7a`
+
+They target Android 8+ (API 26 toolchain) and are intended to be copied into `DroidFish/uci/`.
+
+See **`docs/DROIDFISH.md`** for exact installation and tuning steps.
+
+## UCI options
 
 ```text
-setoption name StocklessHybrid value true
-setoption name StocklessAggression value 100
+StocklessHybrid      true/false
+StocklessAggression  0..200
+StocklessThreats     true/false
+StocklessMobile      true/false
 ```
 
-`StocklessAggression` accepts 0..200.
+Defaults:
 
-Phase 1 only buys back a small amount of LMR depth in forcing/tactically unstable situations. It does not alter the NNUE centipawn score.
+- Hybrid: ON
+- Aggression: 100
+- Threats: ON
+- Mobile: ON on Android, OFF on desktop
 
-## NNUE plan
+Set `StocklessHybrid=false` to recover the Stockfish search policy for A/B testing.
 
-Current upstream nets:
+## NNUE strategy
 
-- Stockfish: `nn-134a887f4c8f.nnue`
-- Reckless: `v60-7f587dfb.nnue`
+Current upstream nets are research inputs, not blindly averaged together.
 
-Run:
+Stockfish remains the score-producing NNUE path. Reckless's threat accumulator design informs the Stockless threat layer and a future dedicated multi-head network.
 
-```powershell
-./scripts/fetch-networks.ps1
-```
-
-The long-term plan is **not** to evaluate two full networks on every node. Reckless' threat-feature design is used as research input for an eventual Stockless auxiliary attack/danger signal and, if testing supports it, a unified multi-head net.
-
-See `docs/NNUE_PLAN.md`.
+The long-term target is one efficient Stockless network with shared features and auxiliary attack/danger outputs, not two expensive full evaluations per node.
 
 ## Testing rule
 
-Every change should be isolated:
+Every meaningful search change should survive:
 
-1. baseline bench
-2. one search idea
-3. bench / correctness
-4. game test / SPRT
-5. keep or revert
+1. materialization
+2. native compile
+3. UCI smoke
+4. Android cross-compile
+5. bench/correctness
+6. game testing / SPRT
 
-No giant untestable "engine soup" commits.
+No untestable giant engine-soup commits.
 
 ## Licensing
 
-Stockfish is GPL-3.0-or-later. Reckless is AGPL-3.0. Their original repositories and license terms remain attached through the pinned submodules. Any copied/ported Reckless-derived code must satisfy its AGPL obligations.
+Stockfish is GPL-3.0-or-later. Reckless is AGPL-3.0. Stockless integration code is distributed under AGPL-3.0 and upstream attribution is retained.
