@@ -1,0 +1,62 @@
+name: Stockless v0.5 Fine Sweep
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - arena/V05_FINE
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        aggression: [140, 145, 150, 155, 160]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check chess
+      - name: Cute Chess
+        shell: bash
+        run: |
+          curl -L --fail --retry 3 -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - run: python tools/make_openings.py tests/opening_lines.txt tests/openings.epd
+      - name: Build engines
+        shell: bash
+        run: |
+          python tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          make -C upstream/stockfish/src -j2 build ARCH=x86-64-avx2
+      - name: Run 600 games
+        shell: bash
+        env:
+          STOCKLESS_AGGRESSION: ${{ matrix.aggression }}
+          STOCKLESS_OVERDRIVE: "true"
+          STOCKLESS_THREATS: "true"
+          STOCKLESS_MOBILE: "false"
+        run: |
+          mkdir -p results
+          OUT="$PWD/results/fine-${{ matrix.aggression }}.pgn"
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/upstream/stockfish/src/stockfish" Stockfish "$OUT" 600 0.2+0.002 2 \
+            2>&1 | tee "results/fine-${{ matrix.aggression }}.log"
+          python tools/match_summary.py "$OUT" Stockless | tee "results/fine-${{ matrix.aggression }}-summary.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v05-fine-${{ matrix.aggression }}
+          path: results/
+          if-no-files-found: warn
