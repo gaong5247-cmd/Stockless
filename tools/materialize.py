@@ -14,7 +14,7 @@ DEFAULT_OUT = ROOT / "build" / "stockless-src"
 
 STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
 RECKLESS_SHA = "7300f044812d80397960e3a27a4f085e9487419a"
-STOCKLESS_VERSION = "0.3-dev"
+STOCKLESS_VERSION = "0.4-dev"
 
 
 def replace_once(path: Path, old: str, new: str) -> None:
@@ -73,10 +73,13 @@ def materialize(out: Path) -> None:
 """ + node_anchor
     replace_once(search_cpp, node_anchor, node_patch)
 
-    lmr_anchor = """        // Apply the computed LMR
-        if (depth >= 2 && moveCount > 1)
+    policy_anchor = """        // Increase reduction for ttPv nodes
+        // (*Scaler) Larger values scale well.
+        if (ss->ttPv)
+            r += 929;
 """
-    lmr_patch = """        const int stocklessCorrectionSignal =
+    policy_patch = policy_anchor + """
+        const int stocklessCorrectionSignal =
           std::min(256, int(std::abs(correctionValue) / 131072));
 
         const auto stocklessPolicy = Stockless::make_search_policy({
@@ -97,10 +100,43 @@ def materialize(out: Path) -> None:
           cutNode,
           stocklessThreat,
         });
-        r += stocklessPolicy.lmrAdjustment;
+"""
+    replace_once(search_cpp, policy_anchor, policy_patch)
+
+    replace_once(
+        search_cpp,
+        """            if (moveCount >= (3 + depth * depth) / (2 - improving))
+                mp.skip_quiet_moves();
+""",
+        """            if (moveCount >= (3 + depth * depth) / (2 - improving)
+                              + stocklessPolicy.quietMoveAllowance)
+                mp.skip_quiet_moves();
+""",
+    )
+
+    replace_once(
+        search_cpp,
+        "            int lmrDepth = newDepth - r / 1024;\n",
+        "            int lmrDepth = newDepth - r / 1024 + stocklessPolicy.pruningDepthBoost;\n",
+    )
+
+    lmr_anchor = """        // Apply the computed LMR
+        if (depth >= 2 && moveCount > 1)
+"""
+    lmr_patch = """        r += stocklessPolicy.lmrAdjustment;
 
 """ + lmr_anchor
     replace_once(search_cpp, lmr_anchor, lmr_patch)
+
+    replace_once(
+        search_cpp,
+        """                newDepth += doDeeperSearch - doShallowerSearch;
+""",
+        """                newDepth += doDeeperSearch - doShallowerSearch;
+                if (stocklessPolicy.reSearchDepthBonus && value > bestValue + 20)
+                    newDepth += stocklessPolicy.reSearchDepthBonus;
+""",
+    )
 
     replace_once(
         engine_cpp,
@@ -117,7 +153,7 @@ def materialize(out: Path) -> None:
       }));
 
     options.add(
-      "StocklessAggression", Option(100, 0, 200, [](const Option& o) {
+      "StocklessAggression", Option(112, 0, 200, [](const Option& o) {
           Stockless::set_hybrid_aggression(int(o));
           return std::nullopt;
       }));
@@ -125,6 +161,12 @@ def materialize(out: Path) -> None:
     options.add(
       "StocklessThreats", Option(true, [](const Option& o) {
           Stockless::set_threats_enabled(bool(o));
+          return std::nullopt;
+      }));
+
+    options.add(
+      "StocklessOverdrive", Option(Stockless::default_overdrive(), [](const Option& o) {
+          Stockless::set_overdrive_enabled(bool(o));
           return std::nullopt;
       }));
 
@@ -139,7 +181,7 @@ def materialize(out: Path) -> None:
     replace_once(
         misc_cpp,
         '    ss << "Stockfish " << version << std::setfill(\'0\');\n',
-        '    ss << "Stockless 0.3" << std::setfill(\'0\');\n',
+        '    ss << "Stockless 0.4" << std::setfill(\'0\');\n',
     )
     replace_once(
         misc_cpp,
