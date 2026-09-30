@@ -14,7 +14,7 @@ DEFAULT_OUT = ROOT / "build" / "stockless-src"
 
 STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
 RECKLESS_SHA = "7300f044812d80397960e3a27a4f085e9487419a"
-STOCKLESS_VERSION = "0.4-dev"
+STOCKLESS_VERSION = "0.5-dev"
 
 
 def replace_once(path: Path, old: str, new: str) -> None:
@@ -153,7 +153,7 @@ def materialize(out: Path) -> None:
       }));
 
     options.add(
-      "StocklessAggression", Option(112, 0, 200, [](const Option& o) {
+      "StocklessAggression", Option(100, 0, 200, [](const Option& o) {
           Stockless::set_hybrid_aggression(int(o));
           return std::nullopt;
       }));
@@ -181,7 +181,7 @@ def materialize(out: Path) -> None:
     replace_once(
         misc_cpp,
         '    ss << "Stockfish " << version << std::setfill(\'0\');\n',
-        '    ss << "Stockless 0.4" << std::setfill(\'0\');\n',
+        '    ss << "Stockless 0.5" << std::setfill(\'0\');\n',
     )
     replace_once(
         misc_cpp,
