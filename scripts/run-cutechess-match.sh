@@ -29,8 +29,8 @@ mkdir -p "$(dirname "$OUT_PGN")"
   -tournament round-robin \
   -engine name=Stockless cmd="$STOCKLESS" \
     option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
-    option.StocklessHybrid=true option.StocklessAggression=100 \
-    option.StocklessThreats=true option.StocklessMobile=false \
+    option.StocklessHybrid=true option.StocklessAggression=112 \
+    option.StocklessThreats=true option.StocklessOverdrive=true option.StocklessMobile=false \
   -engine name="$OPPONENT_NAME" cmd="$OPPONENT_CMD" \
     option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
   -each proto=uci tc="$TC" \
