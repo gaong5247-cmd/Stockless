@@ -15,13 +15,13 @@ inline constexpr bool DefaultMobileProfile = false;
 
 // v0.5 keeps the stable hybrid path on by default, but Selective Overdrive is
 // opt-in until match testing proves it. Android stays conservative as well.
-inline constexpr bool DefaultOverdrive = false;
+inline constexpr bool DefaultOverdrive = true;
 
 inline std::atomic_bool HybridEnabled{true};
 inline std::atomic_bool ThreatsEnabled{true};
 inline std::atomic_bool OverdriveEnabled{DefaultOverdrive};
 inline std::atomic_bool MobileProfile{DefaultMobileProfile};
-inline std::atomic_int  HybridAggression{100};
+inline std::atomic_int  HybridAggression{145};
 
 inline void set_hybrid_enabled(bool value) noexcept {
     HybridEnabled.store(value, std::memory_order_relaxed);
