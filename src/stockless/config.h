@@ -5,18 +5,21 @@
 
 namespace Stockfish::Stockless {
 
-inline constexpr const char* Version = "0.3-dev";
+inline constexpr const char* Version = "0.4-dev";
 
 #if defined(__ANDROID__)
 inline constexpr bool DefaultMobileProfile = true;
+inline constexpr bool DefaultOverdrive = false;
 #else
 inline constexpr bool DefaultMobileProfile = false;
+inline constexpr bool DefaultOverdrive = true;
 #endif
 
 inline std::atomic_bool HybridEnabled{true};
 inline std::atomic_bool ThreatsEnabled{true};
+inline std::atomic_bool OverdriveEnabled{DefaultOverdrive};
 inline std::atomic_bool MobileProfile{DefaultMobileProfile};
-inline std::atomic_int  HybridAggression{100};
+inline std::atomic_int  HybridAggression{112};
 
 inline void set_hybrid_enabled(bool value) noexcept {
     HybridEnabled.store(value, std::memory_order_relaxed);
@@ -32,13 +35,22 @@ inline bool threats_enabled() noexcept {
     return ThreatsEnabled.load(std::memory_order_relaxed);
 }
 
+inline void set_overdrive_enabled(bool value) noexcept {
+    OverdriveEnabled.store(value, std::memory_order_relaxed);
+}
+inline bool overdrive_enabled() noexcept {
+    return OverdriveEnabled.load(std::memory_order_relaxed);
+}
+inline constexpr bool default_overdrive() noexcept {
+    return DefaultOverdrive;
+}
+
 inline void set_mobile_profile(bool value) noexcept {
     MobileProfile.store(value, std::memory_order_relaxed);
 }
 inline bool mobile_profile() noexcept {
     return MobileProfile.load(std::memory_order_relaxed);
 }
-
 inline constexpr bool default_mobile_profile() noexcept {
     return DefaultMobileProfile;
 }
