@@ -25,7 +25,7 @@ jobs:
           BIN=build/stockless-src/src/stockless
           test -x "$BIN"
           printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nsetoption name StocklessThreats value true\nsetoption name StocklessMobile value false\nisready\nquit\n' | "$BIN" | tee uci.txt
-          grep -q 'id name Stockless 0.3' uci.txt
+          grep -q 'id name Stockless 0.4' uci.txt
           grep -q 'option name StocklessHybrid' uci.txt
           grep -q 'option name StocklessThreats' uci.txt
           grep -q 'option name StocklessMobile' uci.txt
@@ -103,10 +103,10 @@ jobs:
           make -C build/stockless-src/src -j2 build \
             ARCH=${{ matrix.arch }} COMP=ndk COMPCXX=${{ matrix.compiler }}
           mkdir -p dist
-          cp build/stockless-src/src/stockless "dist/stockless-0.3-${{ matrix.abi }}"
-          chmod +x "dist/stockless-0.3-${{ matrix.abi }}"
-          file "dist/stockless-0.3-${{ matrix.abi }}"
-          llvm-readelf -h "dist/stockless-0.3-${{ matrix.abi }}" | tee "dist/elf-${{ matrix.abi }}.txt"
+          cp build/stockless-src/src/stockless "dist/stockless-0.4-${{ matrix.abi }}"
+          chmod +x "dist/stockless-0.4-${{ matrix.abi }}"
+          file "dist/stockless-0.4-${{ matrix.abi }}"
+          llvm-readelf -h "dist/stockless-0.4-${{ matrix.abi }}" | tee "dist/elf-${{ matrix.abi }}.txt"
       - name: Verify ABI
         shell: bash
         run: |
@@ -117,8 +117,8 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Stockless-0.3-DroidFish-${{ matrix.abi }}
+          name: Stockless-0.4-DroidFish-${{ matrix.abi }}
           path: |
-            dist/stockless-0.3-${{ matrix.abi }}
+            dist/stockless-0.4-${{ matrix.abi }}
             dist/elf-${{ matrix.abi }}.txt
           if-no-files-found: error
