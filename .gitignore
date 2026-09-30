@@ -1,0 +1,5 @@
+build/
+networks/
+*.nnue
+*.exe
+*.o
