@@ -1,11 +1,19 @@
 # Upstream revisions
 
-This snapshot was initialized from:
+Stockless v0.3-dev is pinned to:
 
 - Stockfish master: `0a215d6c9e48856ef630013b8ab8312941a59057`
-- Reckless main: `31d9cd6fd2bea6d9f72eeb35e0bac70daa295fb1`
+- Reckless 0.10-dev reference: `7300f044812d80397960e3a27a4f085e9487419a`
 
-Stockfish is used as the buildable C++ runtime/search baseline.
-Reckless is retained under `vendor/reckless/` as a source reference for deliberate, testable ports.
+## Role split
 
-Do not silently resync either upstream. Update this file whenever either snapshot is refreshed.
+Stockfish remains the buildable C++ runtime/search/primary-NNUE baseline.
+
+Reckless is a pinned research reference. v0.2/v0.3 specifically study:
+- late-move reduction context
+- correction-history influence on reductions
+- threat accumulator / threat feature representation
+
+Stockless ports ideas deliberately instead of mixing the Rust and C++ engines line-by-line.
+
+Do not silently resync either upstream. Update this file and the materialization patch anchors together.
