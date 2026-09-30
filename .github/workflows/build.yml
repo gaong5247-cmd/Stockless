@@ -24,10 +24,10 @@ jobs:
         run: |
           BIN=build/stockless-src/src/stockless
           test -x "$BIN"
-          printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nsetoption name StocklessThreats value true\nsetoption name StocklessMobile value false\nisready\nquit\n' | "$BIN" | tee uci.txt
+          printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nsetoption name StocklessThreats value true\nsetoption name StocklessOverdrive value true\nsetoption name StocklessMobile value false\nisready\nquit\n' | "$BIN" | tee uci.txt
           grep -q 'id name Stockless 0.4' uci.txt
           grep -q 'option name StocklessHybrid' uci.txt
-          grep -q 'option name StocklessThreats' uci.txt
+          grep -q 'option name StocklessThreats' uci.txt\n          grep -q 'option name StocklessOverdrive' uci.txt
           grep -q 'option name StocklessMobile' uci.txt
           grep -q 'uciok' uci.txt
           grep -q 'readyok' uci.txt
