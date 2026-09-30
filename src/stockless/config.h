@@ -5,21 +5,23 @@
 
 namespace Stockfish::Stockless {
 
-inline constexpr const char* Version = "0.4-dev";
+inline constexpr const char* Version = "0.5-dev";
 
 #if defined(__ANDROID__)
 inline constexpr bool DefaultMobileProfile = true;
-inline constexpr bool DefaultOverdrive = false;
 #else
 inline constexpr bool DefaultMobileProfile = false;
-inline constexpr bool DefaultOverdrive = true;
 #endif
+
+// v0.5 keeps the stable hybrid path on by default, but Selective Overdrive is
+// opt-in until match testing proves it. Android stays conservative as well.
+inline constexpr bool DefaultOverdrive = false;
 
 inline std::atomic_bool HybridEnabled{true};
 inline std::atomic_bool ThreatsEnabled{true};
 inline std::atomic_bool OverdriveEnabled{DefaultOverdrive};
 inline std::atomic_bool MobileProfile{DefaultMobileProfile};
-inline std::atomic_int  HybridAggression{112};
+inline std::atomic_int  HybridAggression{100};
 
 inline void set_hybrid_enabled(bool value) noexcept {
     HybridEnabled.store(value, std::memory_order_relaxed);
