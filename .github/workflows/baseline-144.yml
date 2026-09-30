@@ -1,0 +1,56 @@
+name: Stockless Baseline 144
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - arena/BASELINE_144
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check chess
+      - name: Cute Chess
+        shell: bash
+        run: |
+          curl -L --fail --retry 3 -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - run: python tools/make_openings.py tests/opening_lines.txt tests/openings.epd
+      - name: Build
+        shell: bash
+        run: |
+          python tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          make -C upstream/stockfish/src -j2 build ARCH=x86-64-avx2
+      - name: Run 1000 games baseline144
+        shell: bash
+        env:
+          STOCKLESS_AGGRESSION: "144"
+          STOCKLESS_OVERDRIVE: "false"
+          STOCKLESS_THREATS: "true"
+          STOCKLESS_MOBILE: "false"
+        run: |
+          mkdir -p results
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/upstream/stockfish/src/stockfish" Stockfish \
+            "$PWD/results/baseline144.pgn" 1000 0.2+0.002 2 \
+            2>&1 | tee results/baseline144.log
+          python tools/match_summary.py results/baseline144.pgn Stockless | tee results/baseline144-summary.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: baseline144-1000games
+          path: results/
+          if-no-files-found: warn
