@@ -7,8 +7,6 @@
 
 namespace Stockfish::Stockless {
 
-// v0.2 owns reduction adaptation. v0.3 supplies threat signals.
-// The boundary stays explicit so either layer can be benchmarked separately.
 struct SearchInputs {
     int depth;
     int moveCount;
@@ -34,7 +32,14 @@ struct SearchPolicy {
     int pressure = 0;
     int danger = 0;
     int volatility = 0;
+
+    // Negative means less reduction / deeper LMR search.
     int lmrAdjustment = 0;
+
+    // v0.4 Overdrive: temporarily relax Stockfish pruning in tactical nodes.
+    int pruningDepthBoost = 0;
+    int quietMoveAllowance = 0;
+    int reSearchDepthBonus = 0;
 };
 
 inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
@@ -47,48 +52,72 @@ inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
     int danger = in.threat.kingDanger;
     int volatility = in.threat.tacticalVolatility;
 
-    // Small forcing-context adjustments on top of Stockfish's already-tuned LMR.
-    pressure += in.givesCheck ? 72 : 0;
-    pressure += in.capture ? 28 : 0;
-    pressure += in.ttPv ? 18 : 0;
-    pressure += in.pvNode ? 14 : 0;
+    pressure += in.givesCheck ? 92 : 0;
+    pressure += in.capture ? 34 : 0;
+    pressure += in.ttPv ? 20 : 0;
+    pressure += in.pvNode ? 18 : 0;
 
-    danger += in.inCheck ? 96 : 0;
+    danger += in.inCheck ? 112 : 0;
 
-    // Reckless 0.10-dev gives correction history a strong role in reduction.
-    // Stockless compresses that idea into a bounded volatility signal.
-    volatility += in.correctionSignal / 2;
+    // Reckless-style correction-history sensitivity.
+    volatility += (3 * in.correctionSignal) / 5;
 
     if (!in.improving)
-        volatility += 16;
+        volatility += 18;
 
     if (in.nextCutoffCount > 2)
-        volatility += 20;
+        volatility += 24;
 
-    if (!in.capture && !in.givesCheck && in.moveCount > 8)
-        pressure -= 36;
+    // Do not waste nodes on late quiets unless the board itself is tactically hot.
+    if (!in.capture && !in.givesCheck && in.moveCount > 8
+        && in.threat.tacticalVolatility < 128)
+        pressure -= 44;
 
     out.pressure   = std::clamp(pressure, 0, 256);
     out.danger     = std::clamp(danger, 0, 256);
     out.volatility = std::clamp(volatility, 0, 256);
 
     const int aggression = hybrid_aggression();
-    const int tactical = (3 * out.pressure + 2 * out.danger + 2 * out.volatility) / 7;
+    const int tactical =
+      std::clamp((3 * out.pressure + 2 * out.danger + 2 * out.volatility) / 7, 0, 256);
 
-    // 1024 reduction units are roughly one ply.
-    // Mobile deliberately buys less depth to limit node growth and heat.
-    const int cap = mobile_profile() ? 320 : 512;
+    // v0.4 allows substantially more depth on desktop, while mobile remains conservative.
+    const int cap = mobile_profile() ? 384 : 768;
     int buyback = tactical * aggression * cap / (256 * 100);
 
-    // Preserve Stockfish's defensive cut-node behavior unless the position is
-    // genuinely forcing/tactically unstable.
-    if (in.cutNode && !in.ttPv && !in.capture && !in.givesCheck && tactical < 128)
-        buyback = std::max(0, buyback - 96);
+    if (in.givesCheck)
+        buyback += 96;
+
+    if (in.capture && out.pressure >= 160)
+        buyback += 64;
+
+    // Preserve Stockfish's defensive cut-node shape when the node is not forcing.
+    if (in.cutNode && !in.ttPv && !in.capture && !in.givesCheck && tactical < 144)
+        buyback = std::max(0, buyback - 128);
 
     if (in.window <= 32 && (in.pvNode || in.ttPv))
-        buyback += 32;
+        buyback += 48;
 
     out.lmrAdjustment = -std::min(cap, buyback);
+
+    if (overdrive_enabled() && !mobile_profile())
+    {
+        // Boost the effective pruning depth. Larger lmrDepth means fewer
+        // futility/SEE prunes in Stockfish's Step 15.
+        out.pruningDepthBoost = tactical >= 144 ? 1 : 0;
+        if (tactical >= 216 && (in.givesCheck || in.capture || out.danger >= 192))
+            out.pruningDepthBoost = 2;
+
+        // Give tactical quiet moves a few more slots before skip_quiet_moves().
+        if (!in.capture && !in.givesCheck)
+            out.quietMoveAllowance = tactical >= 176 ? 2 : tactical >= 128 ? 1 : 0;
+
+        // If an LMR probe already fails high, forcing/high-volatility moves
+        // deserve one extra full-depth verification ply.
+        if ((in.givesCheck || in.capture || in.pvNode) && tactical >= 192)
+            out.reSearchDepthBonus = 1;
+    }
+
     return out;
 }
 
