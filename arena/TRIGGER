@@ -1,0 +1,2 @@
+Stockless arena run: 1200 games vs Stockfish + 1200 games vs Reckless
+TC=0.2+0.002, concurrency=2, Threads=1, Hash=32
