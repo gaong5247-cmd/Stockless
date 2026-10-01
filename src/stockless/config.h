@@ -17,11 +17,15 @@ inline constexpr bool DefaultMobileProfile = false;
 // opt-in until match testing proves it. Android stays conservative as well.
 inline constexpr bool DefaultOverdrive = false;
 
+// Match-tested strongest aggressive preset. Keep the UCI default and runtime
+// storage tied to one constant so GUI/UCI startup cannot silently diverge.
+inline constexpr int DefaultHybridAggression = 145;
+
 inline std::atomic_bool HybridEnabled{true};
 inline std::atomic_bool ThreatsEnabled{true};
 inline std::atomic_bool OverdriveEnabled{DefaultOverdrive};
 inline std::atomic_bool MobileProfile{DefaultMobileProfile};
-inline std::atomic_int  HybridAggression{100};
+inline std::atomic_int  HybridAggression{DefaultHybridAggression};
 
 inline void set_hybrid_enabled(bool value) noexcept {
     HybridEnabled.store(value, std::memory_order_relaxed);
@@ -62,6 +66,9 @@ inline void set_hybrid_aggression(int value) noexcept {
 }
 inline int hybrid_aggression() noexcept {
     return HybridAggression.load(std::memory_order_relaxed);
+}
+inline constexpr int default_hybrid_aggression() noexcept {
+    return DefaultHybridAggression;
 }
 
 } // namespace Stockfish::Stockless
