@@ -27,10 +27,23 @@ jobs:
           printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nsetoption name StocklessThreats value true\nsetoption name StocklessOverdrive value true\nsetoption name StocklessMobile value false\nisready\nquit\n' | "$BIN" | tee uci.txt
           grep -q 'id name Stockless 0.5' uci.txt
           grep -q 'option name StocklessHybrid' uci.txt
-          grep -q 'option name StocklessThreats' uci.txt\n          grep -q 'option name StocklessOverdrive' uci.txt
+          grep -q 'option name StocklessThreats' uci.txt
+          grep -q 'option name StocklessOverdrive' uci.txt
           grep -q 'option name StocklessMobile' uci.txt
           grep -q 'uciok' uci.txt
           grep -q 'readyok' uci.txt
+      - name: Package Linux artifact
+        shell: bash
+        run: |
+          mkdir -p dist/linux
+          cp build/stockless-src/src/stockless dist/linux/stockless
+          cp assets/stockless-logo.svg engine-branding.json LICENSE NOTICE.md dist/linux/
+          cp docs/GUI_BRANDING.md dist/linux/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-0.5-Linux-x86_64-avx2
+          path: dist/linux
+          if-no-files-found: error
 
   windows:
     runs-on: windows-latest
@@ -60,6 +73,18 @@ jobs:
           if (-not (Test-Path "build/stockless-src/src/stockless.exe")) {
             throw "stockless.exe was not built"
           }
+      - name: Package Windows artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "dist/windows" | Out-Null
+          Copy-Item "build/stockless-src/src/stockless.exe" "dist/windows/stockless.exe"
+          Copy-Item "assets/stockless-logo.svg","engine-branding.json","LICENSE","NOTICE.md" "dist/windows/"
+          Copy-Item "docs/GUI_BRANDING.md" "dist/windows/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-0.5-Windows-x86_64-avx2
+          path: dist/windows
+          if-no-files-found: error
 
   android:
     runs-on: ubuntu-latest
@@ -121,4 +146,9 @@ jobs:
           path: |
             dist/stockless-0.5-${{ matrix.abi }}
             dist/elf-${{ matrix.abi }}.txt
+            assets/stockless-logo.svg
+            engine-branding.json
+            LICENSE
+            NOTICE.md
+            docs/GUI_BRANDING.md
           if-no-files-found: error
