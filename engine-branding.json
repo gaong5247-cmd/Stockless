@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "engine": "Stockless",
+  "protocol": "UCI",
+  "match": {
+    "uci_id_name_prefix": "Stockless",
+    "executable_name_prefix": "stockless"
+  },
+  "branding": {
+    "logo": "assets/stockless-logo.svg",
+    "icon": "assets/stockless-logo.svg",
+    "name": "Stockless"
+  },
+  "notes": "UCI itself has no standard logo command. GUIs that support Stockless branding should read this manifest next to the engine package, or map an id name beginning with Stockless to the bundled logo."
+}
