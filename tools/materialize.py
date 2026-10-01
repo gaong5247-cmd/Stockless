@@ -153,7 +153,7 @@ def materialize(out: Path) -> None:
       }));
 
     options.add(
-      "StocklessAggression", Option(100, 0, 200, [](const Option& o) {
+      "StocklessAggression", Option(Stockless::default_hybrid_aggression(), 0, 200, [](const Option& o) {
           Stockless::set_hybrid_aggression(int(o));
           return std::nullopt;
       }));
