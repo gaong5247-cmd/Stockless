@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="t d">
+<title id="t">Stockless</title><desc id="d">Stockless chess engine logo: a fast fish fused with a chess knight.</desc>
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071c17"/><stop offset=".48" stop-color="#087343"/><stop offset="1" stop-color="#03110e"/></linearGradient><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".45" stop-color="#bfc8c5"/><stop offset="1" stop-color="#66706d"/></linearGradient></defs>
+<rect width="1024" height="1024" rx="190" fill="#f7faf8"/>
+<path d="M174 480c105-104 204-119 292-92-48-69-31-146 45-224 7 83 48 128 122 150 94 28 164 99 217 190-80-18-144-6-193 36-62 54-108 139-155 254H356c38-82 52-151 40-207-54 34-129 31-222-107Z" fill="url(#g)"/>
+<path d="M195 478c89 5 157 35 204 91M443 383c95 29 166 80 215 153M487 319c70 6 128 29 175 70" fill="none" stroke="#dfe9e5" stroke-width="22" stroke-linecap="round"/>
+<path d="M604 397c77 5 139 42 187 111-66-12-120-3-160 29-50 40-91 111-125 213h-91c38-106 79-190 125-250 21-28 43-51 64-69Z" fill="url(#s)" opacity=".95"/>
+<circle cx="706" cy="430" r="34" fill="#071c17"/><circle cx="715" cy="423" r="15" fill="#42ff9b"/>
+<path d="M301 445h-91m126 57H226m150 59H270" stroke="#0b8a52" stroke-width="18" stroke-linecap="round"/>
+<path d="M500 780h170l39 72H450z" fill="#071c17"/><path d="M421 850h317v55H421z" rx="18" fill="url(#g)"/>
+<text x="512" y="974" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="105" font-style="italic" font-weight="900" letter-spacing="-5" fill="#06251b">STOCK<tspan fill="#7a8380">LESS</tspan></text>
+</svg>
