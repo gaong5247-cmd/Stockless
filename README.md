@@ -85,14 +85,16 @@ Stockless includes `engine-branding.json` and `assets/stockless-logo.svg`. A com
 StocklessHybrid      true/false
 StocklessAggression  0..200
 StocklessThreats     true/false
+StocklessOverdrive   true/false
 StocklessMobile      true/false
 ```
 
 Defaults:
 
 - Hybrid: ON
-- Aggression: 100
+- Aggression: 145 (strong aggressive preset)
 - Threats: ON
+- Overdrive: OFF
 - Mobile: ON on Android, OFF on desktop
 
 Set `StocklessHybrid=false` to recover the Stockfish search policy for A/B testing.
