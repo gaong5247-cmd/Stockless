@@ -1,5 +1,8 @@
 # Stockless
 
+<p align="center"><img src="assets/stockless-logo.svg" width="360" alt="Stockless logo"></p>
+
+
 **Stockless = Stockfish's stable C++ backbone + selectively ported Reckless ideas + a separate Stockless hybrid search policy.**
 
 Current development line: **v0.3-dev**
@@ -71,6 +74,10 @@ GitHub Actions builds:
 They target Android 8+ (API 26 toolchain) and are intended to be copied into `DroidFish/uci/`.
 
 See **`docs/DROIDFISH.md`** for exact installation and tuning steps.
+
+## GUI branding
+
+Stockless includes `engine-branding.json` and `assets/stockless-logo.svg`. A compatible GUI can detect the Stockless UCI `id name` / executable and automatically show the bundled logo. See [docs/GUI_BRANDING.md](docs/GUI_BRANDING.md).
 
 ## UCI options
 
