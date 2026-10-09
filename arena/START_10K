@@ -1,0 +1,4 @@
+Stockless v0.5 search-policy A/B against pinned Stockfish
+Aggression 144: 5000 games; Aggression 145: 5000 games
+StocklessHybrid=true, Threats=true, Overdrive=false, Mobile=false
+Time control 0.2+0.002, 1 thread per engine, 32 MiB hash, paired colors
