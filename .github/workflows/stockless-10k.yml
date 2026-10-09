@@ -1,0 +1,136 @@
+name: Stockless 10000-game aggression comparison
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'arena/START_10K'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arena:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        aggression: [144, 145]
+        shard: [0, 1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install python-chess for opening validation
+        run: python -m pip install --disable-pip-version-check chess
+
+      - name: Fetch Cute Chess
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage \
+            https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+
+      - name: Generate legal openings
+        run: python tools/make_openings.py tests/opening_lines.txt tests/openings.epd
+
+      - name: Build both engines from identical pinned Stockfish source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          make -C upstream/stockfish/src -j2 build ARCH=x86-64-avx2
+          test -x build/stockless-src/src/stockless
+          test -x upstream/stockfish/src/stockfish
+
+      - name: Run 1000 games in this shard
+        shell: bash
+        env:
+          STOCKLESS_AGGRESSION: ${{ matrix.aggression }}
+          STOCKLESS_OVERDRIVE: 'false'
+          STOCKLESS_THREATS: 'true'
+          STOCKLESS_MOBILE: 'false'
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          # Distinct deterministic shuffles between shards; retain color-paired openings.
+          python - <<'PY'
+          from pathlib import Path
+          import random
+          src = Path('tests/openings.epd')
+          lines = src.read_text().splitlines()
+          assert lines, 'No legal openings available'
+          rng = random.Random(10000 + ${{ matrix.aggression }} * 100 + ${{ matrix.shard }})
+          rng.shuffle(lines)
+          src.write_text('\n'.join(lines) + '\n')
+          PY
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/upstream/stockfish/src/stockfish" Stockfish \
+            "$PWD/results/a${{ matrix.aggression }}-s${{ matrix.shard }}.pgn" \
+            1000 '0.2+0.002' 2 \
+            2>&1 | tee "results/a${{ matrix.aggression }}-s${{ matrix.shard }}.log"
+          python tools/match_summary.py \
+            "results/a${{ matrix.aggression }}-s${{ matrix.shard }}.pgn" Stockless \
+            | tee "results/a${{ matrix.aggression }}-s${{ matrix.shard }}-summary.txt"
+          test "$(grep -c '^\[Event ' "results/a${{ matrix.aggression }}-s${{ matrix.shard }}.pgn")" -eq 1000
+
+      - name: Publish shard summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Aggression ${{ matrix.aggression }} / shard ${{ matrix.shard }}" >> "$GITHUB_STEP_SUMMARY"
+          cat results/*summary.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stockless-a${{ matrix.aggression }}-s${{ matrix.shard }}
+          path: results/
+          if-no-files-found: warn
+
+  overall:
+    if: always()
+    needs: arena
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stockless-a*
+          path: collected
+          merge-multiple: true
+      - name: Summarize total 10000 games
+        shell: bash
+        run: |
+          mkdir -p results
+          for agg in 144 145; do
+            cat collected/a${agg}-s*.pgn > "results/aggression-${agg}.pgn"
+            python tools/match_summary.py "results/aggression-${agg}.pgn" Stockless \
+              | tee "results/aggression-${agg}-summary.txt"
+            echo "### Stockless aggression ${agg} versus Stockfish" >> "$GITHUB_STEP_SUMMARY"
+            echo '\`\`\`text' >> "$GITHUB_STEP_SUMMARY"
+            cat "results/aggression-${agg}-summary.txt" >> "$GITHUB_STEP_SUMMARY"
+            echo '\`\`\`' >> "$GITHUB_STEP_SUMMARY"
+          done
+          test "$(grep -c '^\[Event ' results/aggression-144.pgn)" -eq 5000
+          test "$(grep -c '^\[Event ' results/aggression-145.pgn)" -eq 5000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockless-10000-consolidated-results
+          path: results/
