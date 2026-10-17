@@ -17,6 +17,10 @@ inline constexpr bool DefaultMobileProfile = false;
 // opt-in until match testing proves it. Android stays conservative as well.
 inline constexpr bool DefaultOverdrive = false;
 
+// New threat-conditioned history stays opt-in until fixed-time SPRT tests.
+inline constexpr bool DefaultThreatHistory = false;
+inline constexpr int  DefaultThreatHistoryWeight = 100;
+
 // Match-tested strongest aggressive preset. Keep the UCI default and runtime
 // storage tied to one constant so GUI/UCI startup cannot silently diverge.
 inline constexpr int DefaultHybridAggression = 145;
@@ -26,6 +30,8 @@ inline std::atomic_bool ThreatsEnabled{true};
 inline std::atomic_bool OverdriveEnabled{DefaultOverdrive};
 inline std::atomic_bool MobileProfile{DefaultMobileProfile};
 inline std::atomic_int  HybridAggression{DefaultHybridAggression};
+inline std::atomic_bool ThreatHistoryEnabled{DefaultThreatHistory};
+inline std::atomic_int  ThreatHistoryWeight{DefaultThreatHistoryWeight};
 
 inline void set_hybrid_enabled(bool value) noexcept {
     HybridEnabled.store(value, std::memory_order_relaxed);
@@ -69,6 +75,26 @@ inline int hybrid_aggression() noexcept {
 }
 inline constexpr int default_hybrid_aggression() noexcept {
     return DefaultHybridAggression;
+}
+
+inline void set_threat_history_enabled(bool value) noexcept {
+    ThreatHistoryEnabled.store(value, std::memory_order_relaxed);
+}
+inline bool threat_history_enabled() noexcept {
+    return hybrid_enabled() && ThreatHistoryEnabled.load(std::memory_order_relaxed);
+}
+inline constexpr bool default_threat_history() noexcept {
+    return DefaultThreatHistory;
+}
+
+inline void set_threat_history_weight(int value) noexcept {
+    ThreatHistoryWeight.store(std::clamp(value, 0, 200), std::memory_order_relaxed);
+}
+inline int threat_history_weight() noexcept {
+    return ThreatHistoryWeight.load(std::memory_order_relaxed);
+}
+inline constexpr int default_threat_history_weight() noexcept {
+    return DefaultThreatHistoryWeight;
 }
 
 } // namespace Stockfish::Stockless
