@@ -10,6 +10,8 @@
 
 **Version note:** The checked-in implementation currently identifies itself as **0.5-dev** (`src/stockless/config.h` and `tools/materialize.py`). Earlier README material referenced 0.3-dev. External mentions of 0.6 do not, by themselves, establish that the main-branch source implements 0.6. Refer to release tags and artifacts for published versions.
 
+**Experimental research:** [v0.7 threat-conditioned quiet history design, switches and reproducible A/B tests](docs/EXPERIMENT_07.md). This feature is OFF by default; no Elo gain is claimed.
+
 ## Architecture
 
 | Layer | Implementation / responsibility |
@@ -131,6 +133,8 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 > Stockless는 Stockfish의 안정적인 C++ 엔진 기반 위에 Reckless의 연구 아이디어를 참고한 **독립적인 전술 인식형 탐색 정책**을 추가한 하이브리드 체스 엔진입니다. 두 엔진의 코드를 단순히 반반 합치거나 NNUE 가중치를 평균 낸 구조가 아닙니다.
 
 **버전 안내:** 현재 main 브랜치의 `config.h`와 `materialize.py`는 **0.5-dev**를 명시합니다. 기존 README의 0.3-dev 표기와 외부 사이트의 0.6 소개는 실제 소스 버전과 구별해야 합니다. 공개 릴리스 버전은 태그 및 빌드 산출물을 기준으로 확인하세요.
+
+**실험 연구:** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](docs/EXPERIMENT_07.md). 기본값은 OFF이며 Elo 상승이 검증된 것은 아닙니다.
 
 ## 구성 요소
 
