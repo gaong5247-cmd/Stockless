@@ -1,6 +1,6 @@
 # Upstream revisions
 
-Stockless v0.3-dev is pinned to:
+Stockless v0.7 is pinned to:
 
 - Stockfish master: `0a215d6c9e48856ef630013b8ab8312941a59057`
 - Reckless 0.10-dev reference: `7300f044812d80397960e3a27a4f085e9487419a`

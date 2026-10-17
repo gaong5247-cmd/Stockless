@@ -327,6 +327,11 @@ def materialize(out: Path) -> None:
         '    ss << "Stockfish " << version << std::setfill(\'0\');\n',
         '    ss << "Stockless " << Stockless::Version << std::setfill(\'0\');\n',
     )
+    replace_once(
+        misc_cpp,
+        'constexpr std::string_view version = "dev";\n',
+        '[[maybe_unused]] constexpr std::string_view version = "dev";\n',
+    )
     # Upstream Stockfish is "dev" and appends -date-sha. Stockless uses a release name.
     replace_once(
         misc_cpp,

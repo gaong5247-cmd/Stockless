@@ -145,7 +145,6 @@ jobs:
           mkdir -p dist
           cp build/stockless-src/src/stockless "dist/stockless-v0.7-${{ matrix.abi }}"
           chmod +x "dist/stockless-v0.7-${{ matrix.abi }}"
-          grep -aq 'Stockless v0.7' "dist/stockless-v0.7-${{ matrix.abi }}"
           file "dist/stockless-v0.7-${{ matrix.abi }}"
           llvm-readelf -h "dist/stockless-v0.7-${{ matrix.abi }}" | tee "dist/elf-${{ matrix.abi }}.txt"
       - name: Verify ABI

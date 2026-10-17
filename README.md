@@ -8,11 +8,11 @@
 
 **Repository:** https://github.com/gaong5247-cmd/Stockless
 
-**Version note:** The checked-in implementation currently identifies itself as **0.5-dev** (`src/stockless/config.h` and `tools/materialize.py`). Earlier README material referenced 0.3-dev. External mentions of 0.6 do not, by themselves, establish that the main-branch source implements 0.6. Refer to release tags and artifacts for published versions.
+**Implementation version: v0.7.** Its UCI handshake reports `id name Stockless v0.7` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
 
 **Experimental research:** [v0.7 threat-conditioned quiet history design, switches and reproducible A/B tests](docs/EXPERIMENT_07.md). This feature is OFF by default; no Elo gain is claimed.
 
-**Automated tuning:** [ON/OFF tournament, best-weight selection, Stockfish validation and conditional defaults](docs/TUNING_PIPELINE_07.md).
+**Automated tuning:** [ON/OFF tournament, best-weight selection, Stockfish validation and conditional defaults](docs/TUNING_PIPELINE_07.md). [Completed v0.7 tournament report](docs/HISTORY_TUNING_REPORT.md).
 
 ## Architecture
 
@@ -85,6 +85,8 @@ On Windows, use `./scripts/build-windows.ps1` in PowerShell. The materialization
 | `StocklessThreats` | true | Enable board-derived threat signals |
 | `StocklessOverdrive` | false | Opt-in selective tactical extensions |
 | `StocklessMobile` | true on Android; false elsewhere | Lower-cost search profile |
+| `StocklessThreatHistory` | false | Experimental threat-aware history |
+| `StocklessHistoryWeight` | 100 | Used only when history is ON (0–200) |
 
 Example:
 
@@ -134,11 +136,11 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 
 > Stockless는 Stockfish의 안정적인 C++ 엔진 기반 위에 Reckless의 연구 아이디어를 참고한 **독립적인 전술 인식형 탐색 정책**을 추가한 하이브리드 체스 엔진입니다. 두 엔진의 코드를 단순히 반반 합치거나 NNUE 가중치를 평균 낸 구조가 아닙니다.
 
-**버전 안내:** 현재 main 브랜치의 `config.h`와 `materialize.py`는 **0.5-dev**를 명시합니다. 기존 README의 0.3-dev 표기와 외부 사이트의 0.6 소개는 실제 소스 버전과 구별해야 합니다. 공개 릴리스 버전은 태그 및 빌드 산출물을 기준으로 확인하세요.
+**현재 소스 버전: v0.7.** UCI에서 날짜 접미사 없이 `id name Stockless v0.7`로 응답합니다. History ON은 성능 향상이 입증되지 않아 **기본 OFF**입니다.
 
 **실험 연구:** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](docs/EXPERIMENT_07.md). 기본값은 OFF이며 Elo 상승이 검증된 것은 아닙니다.
 
-**자동 튜닝:** [ON/OFF 및 가중치별 대국, 최적 후보 선정, Stockfish 검증과 조건부 기본값 변경](docs/TUNING_PIPELINE_07.md).
+**자동 튜닝:** [ON/OFF 및 가중치별 대국, 최적 후보 선정, Stockfish 검증과 조건부 기본값 변경](docs/TUNING_PIPELINE_07.md). [v0.7 실제 대국 보고서](docs/HISTORY_TUNING_REPORT.md).
 
 ## 구성 요소
 
@@ -187,6 +189,8 @@ Windows에서는 PowerShell에서 `./scripts/build-windows.ps1`을 사용할 수
 | `StocklessThreats` | true | 위협 신호 사용 |
 | `StocklessOverdrive` | false | 선택적 전술 탐색 강화 |
 | `StocklessMobile` | Android에서 true | 저비용 모바일 탐색 |
+| `StocklessThreatHistory` | false | 위협 History 기본 OFF |
+| `StocklessHistoryWeight` | 100 | History ON에서만 영향(0~200) |
 
 `StocklessHybrid=false`를 설정하면 Stockless 탐색 조정을 비활성화해 Stockfish 기반 탐색과 비교할 수 있습니다.
 
