@@ -1,13 +1,13 @@
 # DroidFish / Android
 
-Stockless v0.3-dev is built as a normal Android UCI executable, so DroidFish can run it directly.
+Stockless v0.7 is built as a normal Android UCI executable, so DroidFish can run it directly.
 
 ## Supported artifacts
 
 GitHub Actions builds two binaries:
 
-- `stockless-0.3-arm64-v8a` — recommended for almost every modern 64-bit Android phone/tablet.
-- `stockless-0.3-armeabi-v7a` — fallback for old 32-bit ARM devices.
+- `stockless-v0.7-arm64-v8a` — recommended for almost every modern 64-bit Android phone/tablet.
+- `stockless-v0.7-armeabi-v7a` — fallback for old 32-bit ARM devices.
 
 Both are compiled with Android API 26-compatible NDK toolchains (Android 8+ target).
 
@@ -28,10 +28,13 @@ DroidFish copies the selected engine to its private executable directory, marks 
 
 ## Stockless options
 
-- `StocklessHybrid = true` — enables Stockless v0.2/v0.3 behavior.
-- `StocklessAggression = 0..200` — 100 is the default.
+- `StocklessHybrid = true` — enables Stockless hybrid search.
+- `StocklessAggression = 0..200` — 145 is the default.
 - `StocklessThreats = true` — enables the v0.3 tactical threat signal.
 - `StocklessMobile = true` — enabled by default on Android builds.
+- `StocklessOverdrive = false` — selective tactical extension is opt-in.
+- `StocklessThreatHistory = false` — OFF following v0.7 tournament testing.
+- `StocklessHistoryWeight = 100` — inactive when history is OFF.
 
 The mobile profile delays the more expensive threat-map calculation to deeper/important nodes and caps LMR depth buyback more aggressively.
 
@@ -41,14 +44,16 @@ For a phone:
 
 ```text
 StocklessHybrid = true
-StocklessAggression = 100
+StocklessAggression = 145
 StocklessThreats = true
+StocklessOverdrive = false
+StocklessThreatHistory = false
 StocklessMobile = true
 Threads = 2-4
 Hash = 64-256
 ```
 
-For a tablet with strong cooling, try `StocklessAggression = 110-125` and more threads only if sustained speed remains stable.
+For tablets, adjust threads and hash according to measured sustained performance; v0.7's default aggression remains 145.
 
 ## Architecture
 
