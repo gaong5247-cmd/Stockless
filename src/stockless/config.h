@@ -5,7 +5,7 @@
 
 namespace Stockfish::Stockless {
 
-inline constexpr const char* Version = "0.5-dev";
+inline constexpr const char* Version = "v0.7";
 
 #if defined(__ANDROID__)
 inline constexpr bool DefaultMobileProfile = true;
@@ -13,7 +13,7 @@ inline constexpr bool DefaultMobileProfile = true;
 inline constexpr bool DefaultMobileProfile = false;
 #endif
 
-// v0.5 keeps the stable hybrid path on by default, but Selective Overdrive is
+// v0.7 keeps the established hybrid path on by default, but Selective Overdrive is
 // opt-in until match testing proves it. Android stays conservative as well.
 inline constexpr bool DefaultOverdrive = false;
 
@@ -21,7 +21,7 @@ inline constexpr bool DefaultOverdrive = false;
 inline constexpr bool DefaultThreatHistory = false;
 inline constexpr int  DefaultThreatHistoryWeight = 100;
 
-// Match-tested strongest aggressive preset. Keep the UCI default and runtime
+// Established aggression preset. Keep the UCI default and runtime
 // storage tied to one constant so GUI/UCI startup cannot silently diverge.
 inline constexpr int DefaultHybridAggression = 145;
 

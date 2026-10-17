@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 
-def wait_for(lines: "queue.Queue[str | None]", prefix: str, seconds: float = 60.0) -> str:
+def wait_for(lines: "queue.Queue[str | None]", prefix: str, seconds: float = 60.0, collected: list[str] | None = None) -> str:
     deadline = time.monotonic() + seconds
     while True:
         remaining = deadline - time.monotonic()
@@ -25,6 +25,8 @@ def wait_for(lines: "queue.Queue[str | None]", prefix: str, seconds: float = 60.
             raise TimeoutError(f"UCI timeout waiting for {prefix}") from None
         if line is None:
             raise RuntimeError(f"Engine exited before {prefix}")
+        if collected is not None:
+            collected.append(line)
         if line.startswith(prefix):
             return line
 
@@ -62,7 +64,21 @@ def main() -> None:
 
         try:
             send("uci")
-            wait_for(lines, "uciok")
+            header: list[str] = []
+            wait_for(lines, "uciok", collected=header)
+            required = {
+                "id name Stockless v0.7",
+                "option name StocklessHybrid type check default true",
+                "option name StocklessAggression type spin default 145 min 0 max 200",
+                "option name StocklessThreats type check default true",
+                "option name StocklessOverdrive type check default false",
+                "option name StocklessThreatHistory type check default false",
+                "option name StocklessHistoryWeight type spin default 100 min 0 max 200",
+            }
+            missing = sorted(required.difference(header))
+            if missing:
+                raise AssertionError(f"Incorrect v0.7 UCI header: missing {missing}; got {header}")
+            print("UCI identity Stockless v0.7 and recommended defaults verified")
             send("setoption name Threads value 1")
             send("setoption name Hash value 32")
             send("setoption name StocklessOverdrive value false")

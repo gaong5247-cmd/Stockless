@@ -14,7 +14,16 @@ DEFAULT_OUT = ROOT / "build" / "stockless-src"
 
 STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
 RECKLESS_SHA = "7300f044812d80397960e3a27a4f085e9487419a"
-STOCKLESS_VERSION = "0.5-dev"
+def stockless_version() -> str:
+    import re
+    source = (OVERLAY / "config.h").read_text(encoding="utf-8")
+    match = re.search(r'inline constexpr const char\* Version = "([^"]+)";', source)
+    if not match:
+        raise RuntimeError("Stockless version declaration not found in config.h")
+    return match.group(1)
+
+
+STOCKLESS_VERSION = stockless_version()
 
 
 def replace_once(path: Path, old: str, new: str) -> None:
@@ -310,8 +319,19 @@ def materialize(out: Path) -> None:
 
     replace_once(
         misc_cpp,
+        '#include "misc.h"\n',
+        '#include "misc.h"\n#include "stockless_core/config.h"\n',
+    )
+    replace_once(
+        misc_cpp,
         '    ss << "Stockfish " << version << std::setfill(\'0\');\n',
-        '    ss << "Stockless 0.5" << std::setfill(\'0\');\n',
+        '    ss << "Stockless " << Stockless::Version << std::setfill(\'0\');\n',
+    )
+    # Upstream Stockfish is "dev" and appends -date-sha. Stockless uses a release name.
+    replace_once(
+        misc_cpp,
+        '    if constexpr (version == "dev")\n',
+        '    if constexpr (false)  // Stockless has a fixed v0.7 identity\n',
     )
     replace_once(
         misc_cpp,
