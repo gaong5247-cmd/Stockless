@@ -1,0 +1,3 @@
+profile=smoke
+# smoke checks 8 games/weight + 12-game confirmations and Stockfish matches
+# Switch to profile=full to launch the complete independent validation.
