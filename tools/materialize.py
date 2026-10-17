@@ -123,7 +123,7 @@ def materialize(out: Path) -> None:
         "        {\n"
         "            stocklessHistoryWeight = Stockless::threat_history_weight();\n"
         "            if (stocklessHistoryWeight)\n"
-        "                stocklessEnemyAttacks = Stockless::attacks_for(pos, ~us);\n"
+        "                stocklessEnemyAttacks = Stockless::attacks_for(pos, ~us)\n" "                                       | Attacks::attacks_bb(KING, pos.square<KING>(~us));\n"
         "        }\n",
     )
     replace_once(
@@ -218,7 +218,7 @@ def materialize(out: Path) -> None:
         "        const bool stocklessTrainHistory = Stockless::threat_history_enabled()\n"
         "                                        && Stockless::threat_history_weight() > 0;\n"
         "        const Bitboard stocklessEnemyAttacks =\n"
-        "          stocklessTrainHistory ? Stockless::attacks_for(pos, ~pos.side_to_move()) : 0;\n"
+        "          stocklessTrainHistory\n" "            ? Stockless::attacks_for(pos, ~pos.side_to_move())\n" "                | Attacks::attacks_bb(KING, pos.square<KING>(~pos.side_to_move()))\n" "            : 0;\n"
         "        if (stocklessTrainHistory)\n"
         "            workerThread.threatQuietHistory.update(\n"
         "              stocklessEnemyAttacks, pos.side_to_move(), bestMove, bonus * 450 / 1024);\n",
