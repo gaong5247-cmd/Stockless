@@ -1,3 +1,4 @@
-profile=smoke
-# smoke checks 8 games/weight + 12-game confirmations and Stockfish matches
-# Switch to profile=full to launch the complete independent validation.
+profile=full
+# Full tournament: 160 games per ON weight, 800 confirmation, 600 each vs Stockfish.
+# A longer-TC 400-game test is run for promising, independently confirmed candidates.
+# Change to profile=smoke to run only the small integration test.
