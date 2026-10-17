@@ -293,6 +293,18 @@ def materialize(out: Path) -> None:
           Stockless::set_mobile_profile(bool(o));
           return std::nullopt;
       }));
+
+    options.add(
+      "StocklessThreatHistory", Option(Stockless::default_threat_history(), [](const Option& o) {
+          Stockless::set_threat_history_enabled(bool(o));
+          return std::nullopt;
+      }));
+
+    options.add(
+      "StocklessHistoryWeight", Option(Stockless::default_threat_history_weight(), 0, 200, [](const Option& o) {
+          Stockless::set_threat_history_weight(int(o));
+          return std::nullopt;
+      }));
 """
     replace_once(engine_cpp, option_anchor, option_patch)
 
