@@ -56,8 +56,10 @@ def split(
     seed: int,
 ) -> dict:
     lines, digest = load_epd(source)
-    count = 10 if profile == "smoke" else 800
-    needed = 3 * count
+    counts = ({"screen": 10, "confirm": 10, "stockfish": 10, "long": 10}
+              if profile == "smoke" else
+              {"screen": 600, "confirm": 700, "stockfish": 800, "long": 700})
+    needed = sum(counts.values())
     if len(lines) < needed:
         raise ValueError(
             f"{len(lines)} unique positions found; {profile} requires at least "
@@ -66,8 +68,10 @@ def split(
     random.Random(seed).shuffle(lines)
     out_dir.mkdir(parents=True, exist_ok=True)
     sets = {}
-    for index, stage in enumerate(("screen", "confirm", "stockfish")):
-        selected = lines[index * count : (index + 1) * count]
+    offset = 0
+    for stage, count in counts.items():
+        selected = lines[offset : offset + count]
+        offset += count
         destination = out_dir / f"{stage}.epd"
         destination.write_text("\n".join(selected) + "\n", encoding="utf-8")
         sets[stage] = {"path": str(destination), "positions": len(selected)}
