@@ -17,6 +17,11 @@ jobs:
           python-version: "3.12"
       - name: Materialize Stockless
         run: python tools/materialize.py
+      - name: Verify threat-history invariants
+        shell: bash
+        run: |
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/threat_history_test.cpp -o threat_history_test
+          ./threat_history_test
       - name: Build
         run: make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
       - name: UCI smoke
@@ -28,6 +33,8 @@ jobs:
           grep -q 'id name Stockless 0.5' uci.txt
           grep -q 'option name StocklessHybrid' uci.txt
           grep -q 'option name StocklessThreats' uci.txt
+          grep -q 'option name StocklessThreatHistory type check default false' uci.txt
+          grep -q 'option name StocklessHistoryWeight type spin default 100' uci.txt
           grep -q 'option name StocklessOverdrive' uci.txt
           grep -q 'option name StocklessMobile' uci.txt
           grep -q 'uciok' uci.txt
