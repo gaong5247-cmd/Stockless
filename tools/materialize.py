@@ -54,9 +54,86 @@ def materialize(out: Path) -> None:
     shutil.copytree(OVERLAY, target_overlay)
 
     search_cpp = out / "src" / "search.cpp"
+    search_h = out / "src" / "search.h"
+    movepick_h = out / "src" / "movepick.h"
+    movepick_cpp = out / "src" / "movepick.cpp"
     engine_cpp = out / "src" / "engine.cpp"
     misc_cpp = out / "src" / "misc.cpp"
     makefile = out / "src" / "Makefile"
+
+    # Keep the experimental history owned by each Stockfish search Worker.
+    replace_once(
+        search_h,
+        '#include "history.h"\n',
+        '#include "history.h"\n#include "stockless_core/threat_history.h"\n',
+    )
+    replace_once(
+        search_h,
+        "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n",
+        "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n"
+        "    Stockless::ThreatQuietHistory threatQuietHistory;\n",
+    )
+
+    replace_once(
+        movepick_h,
+        '#include "history.h"\n',
+        '#include "history.h"\n#include "stockless_core/threat_history.h"\n',
+    )
+    replace_once(
+        movepick_h,
+        "                const SharedHistories*,\n                int);\n",
+        "                const SharedHistories*,\n                int,\n"
+        "                const Stockless::ThreatQuietHistory* = nullptr);\n",
+    )
+    replace_once(
+        movepick_h,
+        "    const SharedHistories*       sharedHistory;\n",
+        "    const SharedHistories*       sharedHistory;\n"
+        "    const Stockless::ThreatQuietHistory* threatQuietHistory;\n",
+    )
+    replace_once(
+        movepick_cpp,
+        '#include "position.h"\n',
+        '#include "position.h"\n#include "stockless_core/config.h"\n'
+        '#include "stockless_core/threat_signal.h"\n',
+    )
+    replace_once(
+        movepick_cpp,
+        "                        const SharedHistories*       sh,\n"
+        "                        int                          pl) :\n",
+        "                        const SharedHistories*       sh,\n"
+        "                        int                          pl,\n"
+        "                        const Stockless::ThreatQuietHistory* th) :\n",
+    )
+    replace_once(
+        movepick_cpp,
+        "    sharedHistory(sh),\n",
+        "    sharedHistory(sh),\n    threatQuietHistory(th),\n",
+    )
+    # Compute enemy attack map once per generated quiet-move list, not per move.
+    replace_once(
+        movepick_cpp,
+        "    Color us = pos.side_to_move();\n",
+        "    Color us = pos.side_to_move();\n"
+        "\n"
+        "    [[maybe_unused]] int stocklessHistoryWeight = 0;\n"
+        "    [[maybe_unused]] Bitboard stocklessEnemyAttacks = 0;\n"
+        "    if constexpr (Type == QUIETS)\n"
+        "        if (threatQuietHistory && Stockless::threat_history_enabled())\n"
+        "        {\n"
+        "            stocklessHistoryWeight = Stockless::threat_history_weight();\n"
+        "            if (stocklessHistoryWeight)\n"
+        "                stocklessEnemyAttacks = Stockless::attacks_for(pos, ~us);\n"
+        "        }\n",
+    )
+    replace_once(
+        movepick_cpp,
+        "            int value = 2 * (*mainHistory)[us][m.raw()];\n",
+        "            int value = 2 * (*mainHistory)[us][m.raw()];\n"
+        "            if (stocklessHistoryWeight)\n"
+        "                value += stocklessHistoryWeight\n"
+        "                       * threatQuietHistory->get(stocklessEnemyAttacks, us, m) / 100;\n",
+    )
 
     replace_once(
         search_cpp,
