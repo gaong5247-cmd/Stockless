@@ -39,6 +39,8 @@ jobs:
           grep -q 'option name StocklessMobile' uci.txt
           grep -q 'uciok' uci.txt
           grep -q 'readyok' uci.txt
+      - name: Threat-history ON/OFF real-search smoke
+        run: python tests/uci_history_smoke.py build/stockless-src/src/stockless
       - name: Package Linux artifact
         shell: bash
         run: |
