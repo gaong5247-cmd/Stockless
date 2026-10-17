@@ -147,7 +147,11 @@ def materialize(out: Path) -> None:
     node_patch = """    const auto stocklessThreat =
       Stockless::compute_threat_signal(pos, int(depth), ss->ttPv || PvNode || depth >= 8);
 
-""" + node_anchor
+""" + node_anchor.replace(
+        "                  &sharedHistory, ss->ply);\n",
+        "                  &sharedHistory, ss->ply,\n"
+        "                  Stockless::threat_history_enabled() ? &threatQuietHistory : nullptr);\n",
+    )
     replace_once(search_cpp, node_anchor, node_patch)
 
     policy_anchor = """        // Increase reduction for ttPv nodes
@@ -189,6 +193,43 @@ def materialize(out: Path) -> None:
                               + stocklessPolicy.quietMoveAllowance)
                 mp.skip_quiet_moves();
 """,
+    )
+
+    # Preserve the normal Stockfish history lifecycle.
+    replace_once(
+        search_cpp,
+        "    mainHistory.fill(-5);\n",
+        "    mainHistory.fill(-5);\n    threatQuietHistory.clear();\n",
+    )
+    replace_once(
+        search_cpp,
+        "    lowPlyHistory.fill(102);\n",
+        "    lowPlyHistory.fill(102);\n"
+        "    if (Stockless::threat_history_enabled())\n"
+        "        threatQuietHistory.age();\n",
+    )
+
+    # Reinforce successful quiet moves and penalize searched unsuccessful ones.
+    # The reduced amplitudes limit disruption to Stockfish's primary history.
+    replace_once(
+        search_cpp,
+        "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n",
+        "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n"
+        "        const bool stocklessTrainHistory = Stockless::threat_history_enabled()\n"
+        "                                        && Stockless::threat_history_weight() > 0;\n"
+        "        const Bitboard stocklessEnemyAttacks =\n"
+        "          stocklessTrainHistory ? Stockless::attacks_for(pos, ~pos.side_to_move()) : 0;\n"
+        "        if (stocklessTrainHistory)\n"
+        "            workerThread.threatQuietHistory.update(\n"
+        "              stocklessEnemyAttacks, pos.side_to_move(), bestMove, bonus * 450 / 1024);\n",
+    )
+    replace_once(
+        search_cpp,
+        "            update_quiet_histories(pos, ss, workerThread, move, -actualMalus);\n",
+        "            update_quiet_histories(pos, ss, workerThread, move, -actualMalus);\n"
+        "            if (stocklessTrainHistory)\n"
+        "                workerThread.threatQuietHistory.update(\n"
+        "                  stocklessEnemyAttacks, pos.side_to_move(), move, -actualMalus / 2);\n",
     )
 
     replace_once(
