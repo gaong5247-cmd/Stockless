@@ -12,6 +12,8 @@
 
 **Experimental research:** [v0.7 threat-conditioned quiet history design, switches and reproducible A/B tests](docs/EXPERIMENT_07.md). This feature is OFF by default; no Elo gain is claimed.
 
+**Automated tuning:** [ON/OFF tournament, best-weight selection, Stockfish validation and conditional defaults](docs/TUNING_PIPELINE_07.md).
+
 ## Architecture
 
 | Layer | Implementation / responsibility |
@@ -135,6 +137,8 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 **버전 안내:** 현재 main 브랜치의 `config.h`와 `materialize.py`는 **0.5-dev**를 명시합니다. 기존 README의 0.3-dev 표기와 외부 사이트의 0.6 소개는 실제 소스 버전과 구별해야 합니다. 공개 릴리스 버전은 태그 및 빌드 산출물을 기준으로 확인하세요.
 
 **실험 연구:** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](docs/EXPERIMENT_07.md). 기본값은 OFF이며 Elo 상승이 검증된 것은 아닙니다.
+
+**자동 튜닝:** [ON/OFF 및 가중치별 대국, 최적 후보 선정, Stockfish 검증과 조건부 기본값 변경](docs/TUNING_PIPELINE_07.md).
 
 ## 구성 요소
 
