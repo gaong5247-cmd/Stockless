@@ -37,7 +37,7 @@ def apply(result_path: Path, root: Path) -> bool:
             or requested["long"] < 400):
         raise ValueError("Insufficient independent confirmation sample")
     book = result["book"]
-    if not book["sets_disjoint"] or book["book_unique_positions"] < 2400:
+    if not book["sets_disjoint"] or book["book_unique_positions"] < 2800:
         raise ValueError("Opening book too small or datasets overlap")
     weight = verdict["weight"]
     if not isinstance(weight, int) or not (1 <= weight <= 200):
