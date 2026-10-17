@@ -146,7 +146,7 @@ def main() -> None:
     book = json.loads((opts.books / "manifest.json").read_text(encoding="utf-8"))
     if book["profile"] != opts.profile:
         parser.error("Opening book profile does not match tournament profile")
-    paths = {n: Path(book["sets"][n]["path"]) for n in ("screen", "confirm", "stockfish")}
+    paths = {n: Path(book["sets"][n]["path"]) for n in ("screen", "confirm", "stockfish", "long")}
 
     data = {
         "schema": 1,
@@ -171,7 +171,7 @@ def main() -> None:
         player = f"HistoryW{weight:03d}" if enabled else "StocklessOFF"
         return match(
             opts.cutechess, opts.stockless, opts.stockfish, opts.output,
-            paths[stage if stage != "long" else "confirm"], name, player,
+            paths[stage], name, player,
             weight, enabled, opponent, phases[stage][0], phases[stage][1],
             opts.seed + {"screen": 11, "confirm": 29, "stockfish": 47, "long": 71}[stage],
             opts.concurrency,
@@ -187,7 +187,8 @@ def main() -> None:
             save(data, opts.output)
 
         strongest = sorted(data["screen"], key=lambda row: (-row["stats"]["score"], row["weight"]))[0]
-        enabled = strongest["stats"]["score"] > 0.5
+        # Smoke runs exercise ON/confirm/SF paths regardless of exploratory score.
+        enabled = strongest["stats"]["score"] > 0.5 or smoke
         weight = strongest["weight"] if enabled else 100
         data["candidate"] = {"name": f"HistoryW{weight:03d}" if enabled else "OFF",
                              "weight": weight, "enabled": enabled}
@@ -213,7 +214,7 @@ def main() -> None:
         enough = (
             not smoke and phases["confirm"][0] >= 600
             and phases["stockfish"][0] >= 600 and phases["long"][0] >= 400
-            and book["book_unique_positions"] >= 2400 and book["sets_disjoint"]
+            and book["book_unique_positions"] >= 2800 and book["sets_disjoint"]
         )
         long_ok = bool(data["long_confirmation"] and
                        data["long_confirmation"]["score_ci95"][0] > 0.5)
