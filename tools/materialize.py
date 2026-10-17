@@ -89,7 +89,7 @@ def materialize(out: Path) -> None:
         movepick_h,
         "    const SharedHistories*       sharedHistory;\n",
         "    const SharedHistories*       sharedHistory;\n"
-        "    const Stockless::ThreatQuietHistory* threatQuietHistory;\n",
+        "    const Stockless::ThreatQuietHistory* threatQuietHistory = nullptr;\n",
     )
     replace_once(
         movepick_cpp,
