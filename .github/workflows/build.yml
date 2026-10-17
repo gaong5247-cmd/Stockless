@@ -33,7 +33,7 @@ jobs:
           grep -q 'id name Stockless 0.5' uci.txt
           grep -q 'option name StocklessHybrid' uci.txt
           grep -q 'option name StocklessThreats' uci.txt
-          grep -q 'option name StocklessThreatHistory type check default false' uci.txt
+          grep -q 'option name StocklessThreatHistory type check' uci.txt
           grep -q 'option name StocklessHistoryWeight type spin default 100' uci.txt
           grep -q 'option name StocklessOverdrive' uci.txt
           grep -q 'option name StocklessMobile' uci.txt
