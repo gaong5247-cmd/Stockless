@@ -81,9 +81,9 @@ def materialize(out: Path) -> None:
     )
     replace_once(
         movepick_h,
-        "                const SharedHistories*,\n                int);\n",
-        "                const SharedHistories*,\n                int,\n"
-        "                const Stockless::ThreatQuietHistory* = nullptr);\n",
+        "               const SharedHistories*,\n               int);\n",
+        "               const SharedHistories*,\n               int,\n"
+        "               const Stockless::ThreatQuietHistory* = nullptr);\n",
     )
     replace_once(
         movepick_h,
@@ -99,11 +99,11 @@ def materialize(out: Path) -> None:
     )
     replace_once(
         movepick_cpp,
-        "                        const SharedHistories*       sh,\n"
-        "                        int                          pl) :\n",
-        "                        const SharedHistories*       sh,\n"
-        "                        int                          pl,\n"
-        "                        const Stockless::ThreatQuietHistory* th) :\n",
+        "                       const SharedHistories*       sh,\n"
+        "                       int                          pl) :\n",
+        "                       const SharedHistories*       sh,\n"
+        "                       int                          pl,\n"
+        "                       const Stockless::ThreatQuietHistory* th) :\n",
     )
     replace_once(
         movepick_cpp,
