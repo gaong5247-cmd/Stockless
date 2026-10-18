@@ -7,6 +7,10 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/optimization-bench.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/optimization-bench.yml"
+      - "tests/search_policy_test.cpp"
   workflow_dispatch:
 
 jobs:
