@@ -19,6 +19,15 @@ from history_stats import analyze_pgn, format_result
 TARGET = 0.55
 CANDIDATES = (
     {"name": "ModernDefault", "profile": 0, "aggression": 145, "hybrid": True},
+    {"name": "Aggression135", "profile": 0, "aggression": 135, "hybrid": True},
+    {"name": "Aggression140", "profile": 0, "aggression": 140, "hybrid": True},
+    {"name": "Aggression150", "profile": 0, "aggression": 150, "hybrid": True},
+    {"name": "Aggression155", "profile": 0, "aggression": 155, "hybrid": True},
+    {"name": "Aggression160", "profile": 0, "aggression": 160, "hybrid": True},
+    {"name": "Overdrive145", "profile": 0, "aggression": 145, "hybrid": True,
+     "overdrive": True},
+    {"name": "ThreatsOff145", "profile": 0, "aggression": 145, "hybrid": True,
+     "threats": False},
     {"name": "HybridOff", "profile": 0, "aggression": 145, "hybrid": False},
     {"name": "Aggression80", "profile": 0, "aggression": 80, "hybrid": True},
     {"name": "Aggression110", "profile": 0, "aggression": 110, "hybrid": True},
@@ -32,12 +41,15 @@ CANDIDATES = (
 def engine(name: str, path: Path, profile: dict | None) -> list[str]:
     hybrid = True if profile is None else profile["hybrid"]
     aggression = 145 if profile is None else profile["aggression"]
+    threats = True if profile is None else profile.get("threats", True)
+    overdrive = False if profile is None else profile.get("overdrive", False)
     args = [
         "-engine", f"name={name}", f"cmd={path.resolve()}", f"dir={path.resolve().parent}",
         "option.Threads=1", "option.Hash=32", "option.MoveOverhead=1",
         f"option.StocklessHybrid={'true' if hybrid else 'false'}",
         f"option.StocklessAggression={aggression}",
-        "option.StocklessThreats=true", "option.StocklessOverdrive=false",
+        f"option.StocklessThreats={'true' if threats else 'false'}",
+        f"option.StocklessOverdrive={'true' if overdrive else 'false'}",
         "option.StocklessMobile=false", "option.StocklessThreatHistory=false",
     ]
     if profile is not None:
