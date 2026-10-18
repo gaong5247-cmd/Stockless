@@ -18,6 +18,8 @@
 
 **Optimization candidate (not yet strength-verified):** [per-node policy snapshots, CPU-native PGO builds and rigorous bench gating](docs/OPTIMIZATION_20261018.md). Search fast-path changes are in the source; no Elo gain is claimed.
 
+**v0.8.1 modern NNUE research candidate:** [optional fixed-commit SFNNv18 upstream track](docs/EXPERIMENT_081_SFNNV18.md) preserves the original pinned Stockfish and Reckless Git submodules, builds an upgraded Stockfish evaluation in CI, and gates any strength claim on independent match results. No auto-promotion.
+
 **v0.8 experimental search rebalance (not strength verified):** [six selectable search candidates and frozen v0.7 head-to-head gate](docs/EXPERIMENT_08.md). The new profile is OFF by default; stable v0.7.1 is unchanged.
 
 **Experimental research:** [v0.7 threat-conditioned quiet history design, switches and reproducible A/B tests](docs/EXPERIMENT_07.md). This feature is OFF by default; no Elo gain is claimed.
