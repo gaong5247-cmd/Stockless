@@ -6,6 +6,7 @@ Runs a real search at depth 6, not just a UCI option enumeration.
 from __future__ import annotations
 
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -37,6 +38,12 @@ def main() -> None:
         if len(sys.argv) > 1
         else Path("build/stockless-src/src/stockless")
     )
+    config = (Path(__file__).resolve().parents[1] / "src/stockless/config.h").read_text(encoding="utf-8")
+    match = re.search(r'inline constexpr const char\\* Version = "(v[0-9]+\\.[0-9]+\\.[0-9]+)";', config)
+    if match is None:
+        raise RuntimeError("Could not resolve Stockless UCI version from config.h")
+    version = match.group(1)
+
     with subprocess.Popen(
         [str(binary.resolve())],
         stdin=subprocess.PIPE,
@@ -67,7 +74,7 @@ def main() -> None:
             header: list[str] = []
             wait_for(lines, "uciok", collected=header)
             required = {
-                "id name Stockless v0.7",
+                f"id name Stockless {version}",
                 "option name StocklessHybrid type check default true",
                 "option name StocklessAggression type spin default 145 min 0 max 200",
                 "option name StocklessThreats type check default true",
@@ -77,8 +84,8 @@ def main() -> None:
             }
             missing = sorted(required.difference(header))
             if missing:
-                raise AssertionError(f"Incorrect v0.7 UCI header: missing {missing}; got {header}")
-            print("UCI identity Stockless v0.7 and recommended defaults verified")
+                raise AssertionError(f"Incorrect {version} UCI header: missing {missing}; got {header}")
+            print(f"UCI identity Stockless {version} and recommended defaults verified")
             send("setoption name Threads value 1")
             send("setoption name Hash value 32")
             send("setoption name StocklessOverdrive value false")
