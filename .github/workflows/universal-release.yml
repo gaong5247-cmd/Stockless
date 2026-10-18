@@ -36,6 +36,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Validate release scripts
+        run: python -m py_compile tools/package_release.py tools/verify_release_assets.py tests/uci_history_smoke.py
       - name: Materialize exact pinned Stockfish and Stockless
         run: python tools/materialize.py
       - name: Build all supported x86-64 instruction-set slices
@@ -233,7 +235,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/verify_release_assets.py release-assets
+          python tools/verify_release_assets.py release-assets --expected-commit "$GITHUB_SHA"
           (cd release-assets && sha256sum *.zip > SHA256SUMS.txt)
           cat release-assets/SHA256SUMS.txt
       - name: Publish GitHub Release (fail on existing tag)
