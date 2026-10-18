@@ -1,0 +1,121 @@
+name: Stockless v0.8 source-tag release publishing
+
+on:
+  push:
+    branches: [release/publish-v08-series]
+    paths:
+      - ".github/workflows/publish-v08-sources.yml"
+      - "release/PUBLISH_SOURCES"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stockless-v08-source-tags-publisher
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Check manifest before writing any refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile release/create_notes.py release/verify_packages.py
+          python - <<'PY'
+          import json, subprocess
+          data = json.load(open("release/v08-series-manifest.json", encoding="utf-8"))
+          rows = data["releases"]
+          expected = ["v0.8.0"] + [f"v0.8.{i}" for i in range(1, 8)] + ["v0.8.8-rc1"]
+          if [r["version"] for r in rows] != expected or len(rows) != 9:
+              raise SystemExit("Release series list is not approved")
+          for row in rows:
+              if len(row["sha"]) != 40:
+                  raise SystemExit("Missing exact source SHA")
+              subprocess.run(["git", "cat-file", "-e", row["sha"] + "^{commit}"], check=True)
+          print("Manifest verified: 9 source versions")
+          PY
+
+      - name: Tag immutable source snapshots and publish source-first release pages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo=gaong5247-cmd/Stockless
+          while IFS="$(printf '\t')" read -r version tag sha modern preview; do
+            test -n "$version"
+            target="$RUNNER_TEMP/source-$version"
+            git worktree add --detach "$target" "$sha"
+            if git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+              git fetch origin "refs/tags/$tag:refs/tags/$tag"
+              git show "$tag:src/stockless/config.h" | grep -Fq "Version = \"$version\""
+            else
+              TARGET_DIR="$target" RELVER="$version" python - <<'PY'
+          import os, re
+          from pathlib import Path
+          path = Path(os.environ["TARGET_DIR"]) / "src/stockless/config.h"
+          text = path.read_text(encoding="utf-8")
+          updated, count = re.subn(
+              r'(inline constexpr const char\* Version = ")[^"]+(")',
+              lambda match: match.group(1) + os.environ["RELVER"] + match.group(2),
+              text
+          )
+          if count != 1:
+              raise SystemExit("Unexpected config.h version format")
+          path.write_text(updated, encoding="utf-8")
+          PY
+              git -C "$target" config user.name 'github-actions[bot]'
+              git -C "$target" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+              git -C "$target" add src/stockless/config.h
+              if ! git -C "$target" diff --cached --quiet; then
+                git -C "$target" commit -m "release: versioned source snapshot $version" 
+              fi
+              git -C "$target" tag -a "$tag" -m "Stockless $version source snapshot from $sha"
+              git -C "$target" push origin "refs/tags/$tag"
+            fi
+            git fetch origin "refs/tags/$tag:refs/tags/$tag"
+            commit=$(git rev-parse "$tag^{commit}")
+            git show "$tag:src/stockless/config.h" | grep -Fq "Version = \"$version\""
+            python release/create_notes.py \
+              --version "$version" --source-commit "$commit" --output release-notes.md
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Existing release kept: $tag"
+            elif [ "$preview" = "true" ]; then
+              gh release create "$tag" --verify-tag \
+                --title "Stockless $version — PRE-RELEASE" \
+                --notes-file release-notes.md --prerelease --latest=false
+            else
+              gh release create "$tag" --verify-tag \
+                --title "Stockless $version — research archive" \
+                --notes-file release-notes.md --latest=false
+            fi
+            gh release view "$tag" --json tagName,isPrerelease,url
+          done < <(python - <<'PY'
+          import json
+          for row in json.load(open("release/v08-series-manifest.json", encoding="utf-8"))["releases"]:
+              print("\t".join([
+                  row["version"], row["tag"], row["sha"],
+                  str(row["modern"]).lower(), str(row["prerelease"]).lower()
+              ]))
+          PY
+          )
+          echo "Created 9 immutable source-tag releases. No binary strength claims."
+
+      - name: Preserve source-stage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-v08-Source-Publishing-Manifest
+          path: |
+            release/v08-series-manifest.json
+            release-notes.md
+          if-no-files-found: warn
