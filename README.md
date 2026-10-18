@@ -10,7 +10,7 @@
 
 **Live engine testing / Arena:** [OpenFishtest Arena](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — view match results and standings (maintained as a separate testing project).
 
-**Stable version: v0.7.1.** Latest fastpath candidate: **v0.7.2-dev.20261018.2** (pre-release), with UCI `id name Stockless v0.7.2-dev.20261018.2`. Stable v0.7.1 and earlier dev.1 remain unchanged. [Fastpath notes](docs/PRERELEASE_072_FASTPATH.md).
+**Stable tested baseline:** v0.7.1. **Published versioned research releases:** [v0.8 through v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases) (normal GitHub Releases; not claims of verified strength gains). **New pre-release:** [Stockless v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1), based on official Stockfish SFNNv18/K32Q2 NNUE with an unproven, opt-in attack-map research path. Each release is tied to a distinct historical source snapshot; it does not overwrite the pinned main branch. Windows/Linux/Android assets are attached as builds pass validation.
 
 **Implementation version: v0.7.1 (stable).** Its UCI handshake reports `id name Stockless v0.7.1` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
 
@@ -153,7 +153,7 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 
 **실시간 엔진 대국 / 아레나:** [OpenFishtest Arena 바로가기](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — 엔진 대국 결과와 순위를 확인할 수 있는 별도 테스트 프로젝트입니다.
 
-**현재 소스 버전: v0.7.1.** UCI에서 날짜 접미사 없이 `id name Stockless v0.7.1`로 응답합니다. History ON은 성능 향상이 입증되지 않아 **기본 OFF**입니다.
+**현재 안정 검증 기준: v0.7.1.** **새 버전별 Release:** [v0.8~v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases) (각각 기록 보존용 정식 Release 페이지, Elo 향상 확정 아님). **프리릴리스:** [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1). 기존 소스 코드는 유지하며 실행 바이너리는 플랫폼별 빌드 검증에 따라 첨부됩니다.  UCI에서 날짜 접미사 없이 `id name Stockless v0.7.1`로 응답합니다. History ON은 성능 향상이 입증되지 않아 **기본 OFF**입니다.
 
 **최적화 후보(실전 성능 미검증):** [탐색 노드당 설정 스냅샷, CPU별 PGO 빌드, 벤치마크 기준](docs/OPTIMIZATION_20261018.md). Elo 상승을 검증한 단계는 아닙니다.
 
