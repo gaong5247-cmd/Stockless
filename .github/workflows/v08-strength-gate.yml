@@ -62,17 +62,12 @@ jobs:
           profile = event.get("inputs", {}).get("profile", "smoke")
           # workflow_dispatch is available only after a workflow exists on
           # the default branch. While this experiment is a draft PR, touching
-          # the marker on its own branch opts into ONE full push-triggered run.
+          # the marker on its own branch opts into full push-triggered runs. Reset it to smoke after testing.
           if os.getenv("GITHUB_EVENT_NAME") == "push":
-              edited = {
-                  name for commit in event.get("commits", [])
-                  for name in commit.get("added", []) + commit.get("modified", [])
-              }
-              if "arena/V08_SEARCH_RUN" in edited:
-                  with open("arena/V08_SEARCH_RUN", encoding="utf-8") as marker:
-                      profile = marker.read().strip()
-              else:
-                  profile = "smoke"
+              from pathlib import Path
+              marker = Path("arena/V08_SEARCH_RUN")
+              if marker.is_file():
+                  profile = marker.read_text(encoding="utf-8").strip()
           if profile not in ("smoke", "full"):
               raise SystemExit(f"Unsupported profile: {profile}")
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
