@@ -17,3 +17,11 @@ Stockless uses pinned upstream repositories as Git submodules.
 Stockless-specific integration code is distributed under AGPL-3.0 so future
 Reckless-derived ports can remain under a compatible project-wide copyleft
 baseline. Original upstream notices remain authoritative for their code.
+
+## Stockless project contributors
+
+- Project maintainer: [@gaong5247-cmd](https://github.com/gaong5247-cmd)
+- Acknowledged contributor: [@eueong04-create](https://github.com/eueong04-create)
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the maintained credit list.
+These acknowledgements do not modify Stockfish or Reckless upstream copyrights.
