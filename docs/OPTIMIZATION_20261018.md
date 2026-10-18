@@ -90,6 +90,26 @@ default search-policy changes.
 - Any heuristic or pruning change requires statistical match evidence before
   shipping as the default, regardless of whether it originated in Reckless.
 
+## First completed same-runner speed measurements
+
+[GitHub Actions run #39086996198](https://github.com/gaong5247-cmd/Stockless/actions/runs/39086996198),
+2026-10-18. Ubuntu runner, `ARCH=x86-64-avx2`, one search thread,
+16 MiB hash, fixed-depth 10, four interleaved repeats per executable.
+All measured depth-limited runs searched **282,984 nodes**.
+
+| Comparison | First median NPS | Second median NPS | Change |
+| --- | ---: | ---: | ---: |
+| Frozen v0.7 → search-snapshot source | 769,000 | 774,250 | **+0.68%** |
+| Same source: non-PGO → PGO | 771,280 | 821,449 | **+6.50%** |
+
+This is **preliminary NPS evidence only**. A 0.68% difference is well within
+plausible runner jitter, and four short depth-10 runs are insufficient to
+claim a reliable improvement of that size. The PGO outcome is encouraging,
+but verify locally on target CPUs using `--depth 13 --rounds 20`, and use
+paired matches to evaluate any playing-strength change. The two comparisons
+are separate AB/BA sequences; do not combine their median NPS values to
+report a direct end-to-end speedup.
+
 ## Further investigation (separate candidate PRs)
 
 A small *bounded* per-position threat cache, more precise move-order
