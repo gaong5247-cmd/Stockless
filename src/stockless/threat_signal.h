@@ -25,13 +25,36 @@ struct ThreatSignal {
 // matching Position::attacks_by<QUEEN>() without an extra queen dispatch.
 // Knights are occupancy independent. No king attacks were present in v0.7.
 inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
-    Bitboard attacks = pos.attacks_by<PAWN>(c);
+    // Explicit pawn bitboard attacks work with both the pinned September
+    // Stockfish API and the newer SFNNv18 upstream (which removed attacks_by()).
+    const Bitboard pawns = pos.pieces(c, PAWN);
+    Bitboard attacks = c == WHITE ? pawn_attacks_bb<WHITE>(pawns)
+                                  : pawn_attacks_bb<BLACK>(pawns);
     const Bitboard occupied = pos.pieces();
 
     Bitboard knights = pos.pieces(c, KNIGHT);
     while (knights)
         attacks |= Attacks::attacks_bb(KNIGHT, pop_lsb(knights));
 
+#if defined(STOCKLESS_MODERN_DUAL_QUEENS)
+    // SFNNv18-era Stockfish exposes a combined bishop/rook attack lookup.
+    // Keep queen rays semantically identical, but fetch both at once.
+    Bitboard bishops = pos.pieces(c, BISHOP);
+    while (bishops)
+        attacks |= Attacks::attacks_bb(BISHOP, pop_lsb(bishops), occupied);
+
+    Bitboard rooks = pos.pieces(c, ROOK);
+    while (rooks)
+        attacks |= Attacks::attacks_bb(ROOK, pop_lsb(rooks), occupied);
+
+    Bitboard queens = pos.pieces(c, QUEEN);
+    while (queens)
+    {
+        const auto [diagonal, orthogonal] =
+          Attacks::both_attacks_bb(pop_lsb(queens), occupied);
+        attacks |= diagonal | orthogonal;
+    }
+#else
     Bitboard diagonals = pos.pieces(c, BISHOP, QUEEN);
     while (diagonals)
         attacks |= Attacks::attacks_bb(BISHOP, pop_lsb(diagonals), occupied);
@@ -39,6 +62,7 @@ inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
     Bitboard orthogonals = pos.pieces(c, ROOK, QUEEN);
     while (orthogonals)
         attacks |= Attacks::attacks_bb(ROOK, pop_lsb(orthogonals), occupied);
+#endif
 
     return attacks;
 }
@@ -54,7 +78,15 @@ inline ThreatSignal compute_threat_signal(const Position&      pos,
 
     // Full attack maps are useful but not free. Android gets the stricter gate
     // to preserve NPS/battery life. Deep/important nodes still receive it.
-    const int minDepth = settings.mobile ? 7 : 5;
+    // The v0.7 threshold is unchanged for profile 0. Alternative gating
+    // tests whether cheaper quiet nodes or earlier king defense pay off.
+    int minDepth = settings.mobile ? 7 : 5;
+    if (settings.profile == 1)
+        minDepth = settings.mobile ? 8 : 7;
+    else if (settings.profile == 2)
+        minDepth = settings.mobile ? 6 : 4;
+    else if (settings.profile == 3)
+        minDepth = settings.mobile ? 7 : 6;
     if (depth < minDepth && !importantNode)
         return out;
 
