@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "source_repo": "gaong5247-cmd/Stockless",
+  "published_as": "version-specific Git tags and packaged platform binaries",
+  "official_modern_stockfish_sha": "effdc3fd3f6de6e75fe1374a51a7a7eed66f880b",
+  "releases": [
+    {
+      "version": "v0.8.0",
+      "tag": "Stockless_v0.8",
+      "sha": "d9ed2bc26b82679b9e6f42bc9263cc993bd1d43b",
+      "modern": false,
+      "prerelease": false,
+      "notes": "Adaptive search experiment: legacy pinned Stockfish. 800-game candidate holdout 50.125%; no proved gain."
+    },
+    {
+      "version": "v0.8.1",
+      "tag": "Stockless_v0.8.1",
+      "sha": "1a7d88641534556ee6885c2507bb822995f2870b",
+      "modern": true,
+      "prerelease": false,
+      "notes": "SFNNv18/K32Q2 modern Stockfish research. Holdout 52.00% versus frozen v0.7; interval includes 50%."
+    },
+    {
+      "version": "v0.8.2",
+      "tag": "Stockless_v0.8.2",
+      "sha": "65d2d1c724ebb62e81d451c9a977d807d24da2f7",
+      "modern": true,
+      "prerelease": false,
+      "notes": "PGO research snapshot. Experimental PGO build 800-game holdout 54.6875% versus v0.7; universal packages are not PGO trained."
+    },
+    {
+      "version": "v0.8.3",
+      "tag": "Stockless_v0.8.3",
+      "sha": "affcc3c488410c5b85ebf5232a683e96d2ec671c",
+      "modern": true,
+      "prerelease": false,
+      "notes": "Aggression tuning research. Aggression155 failed 800-game >55% holdout; default aggression145 retained."
+    },
+    {
+      "version": "v0.8.4",
+      "tag": "Stockless_v0.8.4",
+      "sha": "169db04a996a82556085d831d67e69cc6752e45f",
+      "modern": true,
+      "prerelease": false,
+      "notes": "Compiler shootout snapshot. Clang PGO was 0.93% slower than GCC PGO on runner; no change to default search."
+    },
+    {
+      "version": "v0.8.5",
+      "tag": "Stockless_v0.8.5",
+      "sha": "ae842d87d9d3ce7d1d954c84902d9c5203db168a",
+      "modern": true,
+      "prerelease": false,
+      "notes": "Threat-history tuning archive. Every low weight screened worse than OFF; default OFF retained."
+    },
+    {
+      "version": "v0.8.6",
+      "tag": "Stockless_v0.8.6",
+      "sha": "3fb44c914e524bb8112ada077ad7cb1d70f0bd6e",
+      "modern": true,
+      "prerelease": false,
+      "notes": "Native PGO architecture speed experiment. Native BMI2 vs AVX2 +0.10% NPS: noise; no strength claim."
+    },
+    {
+      "version": "v0.8.7",
+      "tag": "Stockless_v0.8.7",
+      "sha": "cd77b1721c9a1579b1ee172e985d221bef4a1acc",
+      "modern": true,
+      "prerelease": false,
+      "notes": "Threats OFF confirmation. 800-game holdout 54.1875% vs v0.7; original Threats ON remains default."
+    },
+    {
+      "version": "v0.8.8-rc1",
+      "tag": "Stockless_v0.8.8-rc1",
+      "sha": "d5c10779bc94a62c254335e6ffed97471919a46b",
+      "modern": true,
+      "prerelease": true,
+      "notes": "Pre-release SFNNv18/K32Q2 with opt-in dual-queen attack-map study; fastpath disabled after -1.17% NPS test; no confirmed extra Elo."
+    }
+  ]
+}
