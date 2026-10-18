@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -12,7 +13,14 @@ RECKLESS = ROOT / "upstream" / "reckless"
 OVERLAY = ROOT / "src" / "stockless"
 DEFAULT_OUT = ROOT / "build" / "stockless-src"
 
-STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
+# Original pinned Stockfish source stays the default. A modern, fixed-commit
+# SFNNv18 evaluation track may be materialized only when explicitly opted in.
+LEGACY_STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
+MODERN_STOCKFISH_SHA = "effdc3fd3f6de6e75fe1374a51a7a7eed66f880b"
+UPSTREAM_TRACK = os.environ.get("STOCKLESS_UPSTREAM_TRACK", "legacy")
+if UPSTREAM_TRACK not in {"legacy", "modern-v18"}:
+    raise RuntimeError(f"Unknown STOCKLESS_UPSTREAM_TRACK={UPSTREAM_TRACK!r}")
+STOCKFISH_SHA = MODERN_STOCKFISH_SHA if UPSTREAM_TRACK == "modern-v18" else LEGACY_STOCKFISH_SHA
 RECKLESS_SHA = "7300f044812d80397960e3a27a4f085e9487419a"
 def stockless_version() -> str:
     import re
@@ -360,6 +368,7 @@ def materialize(out: Path) -> None:
     marker.write_text(
         f"Stockless: {STOCKLESS_VERSION}\n"
         f"Stockfish: {STOCKFISH_SHA}\n"
+        f"Upstream track: {UPSTREAM_TRACK}\n"
         f"Reckless reference: {RECKLESS_SHA}\n",
         encoding="utf-8",
     )

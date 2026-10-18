@@ -18,9 +18,11 @@ from history_stats import analyze_pgn, format_result
 
 TARGET = 0.55
 CANDIDATES = (
+    {"name": "ModernDefault", "profile": 0, "aggression": 145, "hybrid": True},
     {"name": "HybridOff", "profile": 0, "aggression": 145, "hybrid": False},
     {"name": "Aggression80", "profile": 0, "aggression": 80, "hybrid": True},
     {"name": "Aggression110", "profile": 0, "aggression": 110, "hybrid": True},
+    {"name": "Aggression175", "profile": 0, "aggression": 175, "hybrid": True},
     {"name": "Economy", "profile": 1, "aggression": 145, "hybrid": True},
     {"name": "Defense", "profile": 2, "aggression": 145, "hybrid": True},
     {"name": "Balanced", "profile": 3, "aggression": 145, "hybrid": True},
@@ -122,6 +124,8 @@ def write_report(result: dict, output: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", choices=("smoke", "full"), default="smoke")
+    parser.add_argument("--candidates", default=None,
+                        help="Comma-separated subset of candidate names; defaults to all")
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--cutechess", type=Path, required=True)
@@ -138,6 +142,14 @@ def main() -> None:
             parser.error(f"Missing executable: {exe}")
     if opts.concurrency < 1 or opts.concurrency > 4:
         parser.error("Concurrency must be 1..4")
+    by_name = {candidate["name"]: candidate for candidate in CANDIDATES}
+    chosen_names = ([x.strip() for x in opts.candidates.split(",")]
+                    if opts.candidates is not None else list(by_name))
+    if not chosen_names or len(chosen_names) != len(set(chosen_names)):
+        parser.error("Candidate selection must be nonempty and unique")
+    if any(name not in by_name for name in chosen_names):
+        parser.error(f"Unknown candidates: {set(chosen_names) - set(by_name)}")
+    candidates = [by_name[name] for name in chosen_names]
     smoke = opts.profile == "smoke"
     screen_n = opts.screen_games if opts.screen_games is not None else (12 if smoke else 200)
     confirm_n = opts.confirm_games if opts.confirm_games is not None else (16 if smoke else 800)
@@ -165,14 +177,14 @@ def main() -> None:
     write_report(result, opts.output)
 
     try:
-        for candidate in CANDIDATES:
+        for candidate in candidates:
             stat = play(opts, candidate, "screen", screen_book, screen_n,
                         "0.2+0.002", 20261018)
             result["screen"].append({"name": candidate["name"], "settings": candidate, "stats": stat})
             write_report(result, opts.output)
 
         selected = max(result["screen"], key=lambda item: (item["stats"]["score"],
-                            -CANDIDATES.index(item["settings"])))
+                            -candidates.index(item["settings"])))
         result["selected"] = selected["name"]
         candidate = selected["settings"]
         result["confirmation"] = play(opts, candidate, "confirm", confirm_book, confirm_n,

@@ -25,7 +25,11 @@ struct ThreatSignal {
 // matching Position::attacks_by<QUEEN>() without an extra queen dispatch.
 // Knights are occupancy independent. No king attacks were present in v0.7.
 inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
-    Bitboard attacks = pos.attacks_by<PAWN>(c);
+    // Explicit pawn bitboard attacks work with both the pinned September
+    // Stockfish API and the newer SFNNv18 upstream (which removed attacks_by()).
+    const Bitboard pawns = pos.pieces(c, PAWN);
+    Bitboard attacks = c == WHITE ? pawn_attacks_bb<WHITE>(pawns)
+                                  : pawn_attacks_bb<BLACK>(pawns);
     const Bitboard occupied = pos.pieces();
 
     Bitboard knights = pos.pieces(c, KNIGHT);

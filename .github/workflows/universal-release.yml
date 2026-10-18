@@ -26,6 +26,9 @@ permissions:
 
 jobs:
   linux-x86_64:
+    # Keep frozen v0.7.1 release packaging out of unmerged research PRs.
+    # The dedicated experimental and multi-platform build jobs test those.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'experimental/')
     name: Linux x86-64 Universal (CPU dispatch)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -66,6 +69,9 @@ jobs:
           if-no-files-found: error
 
   linux-arm64:
+    # Keep frozen v0.7.1 release packaging out of unmerged research PRs.
+    # The dedicated experimental and multi-platform build jobs test those.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'experimental/')
     name: Linux ARM64 Universal (NEON/DotProd dispatch)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
@@ -101,6 +107,9 @@ jobs:
           if-no-files-found: error
 
   windows-x86_64:
+    # Keep frozen v0.7.1 release packaging out of unmerged research PRs.
+    # The dedicated experimental and multi-platform build jobs test those.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'experimental/')
     name: Windows x86-64 Universal (CPU dispatch)
     runs-on: windows-2022
     timeout-minutes: 150
@@ -153,6 +162,9 @@ jobs:
           if-no-files-found: error
 
   android:
+    # Keep frozen v0.7.1 release packaging out of unmerged research PRs.
+    # The dedicated experimental and multi-platform build jobs test those.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'experimental/')
     name: Android ${{ matrix.abi }} (NDK API 26)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
