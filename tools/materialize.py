@@ -335,6 +335,17 @@ def materialize(out: Path) -> None:
         '         + "Stockless contributors; based on Stockfish and Reckless";\n',
     )
 
+
+    # The pinned Stockfish Universal builder compiles multiple CPU-target slices
+    # in temp_builds/<arch>/; it symlinks TRACKED_TOP only. Include our overlay
+    # directory in that symlink set, otherwise every slice loses the custom
+    # stockless_core/*.h headers and compilation fails on all architectures.
+    replace_once(
+        makefile,
+        "TRACKED_TOP := $(sort $(foreach f,$(SRCS) $(HEADERS) Makefile incbin,$(firstword $(subst /, ,$(f)))))",
+        "TRACKED_TOP := $(sort $(foreach f,$(SRCS) $(HEADERS) Makefile incbin stockless_core,$(firstword $(subst /, ,$(f)))))",
+    )
+
     replace_once(makefile, "\tEXE = stockfish.exe\n", "\tEXE = stockless.exe\n")
     replace_once(makefile, "\tEXE = stockfish.js\n", "\tEXE = stockless.js\n")
     replace_once(makefile, "\tEXE = stockfish\n", "\tEXE = stockless\n")
