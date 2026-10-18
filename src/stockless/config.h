@@ -97,4 +97,24 @@ inline constexpr int default_threat_history_weight() noexcept {
     return DefaultThreatHistoryWeight;
 }
 
+// UCI option state is stable for a search. Snapshot its atomics once per
+// node, rather than reloading them for every legal move. Never mutate this
+// snapshot during search; UCI setoption must be applied between searches.
+struct SearchSettings {
+    bool hybrid;
+    bool threats;
+    bool overdrive;
+    bool mobile;
+    int aggression;
+};
+
+inline SearchSettings search_settings() noexcept {
+    const bool hybrid = hybrid_enabled();
+    if (!hybrid)
+        return {false, false, false, false, 0};
+
+    return {true, threats_enabled(), overdrive_enabled(), mobile_profile(),
+            hybrid_aggression()};
+}
+
 } // namespace Stockfish::Stockless

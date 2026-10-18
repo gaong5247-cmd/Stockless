@@ -22,6 +22,11 @@ jobs:
         run: |
           c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/threat_history_test.cpp -o threat_history_test
           ./threat_history_test
+      - name: Verify v0.7 search policy decision equivalence
+        shell: bash
+        run: |
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/search_policy_test.cpp -o search_policy_test
+          ./search_policy_test
       - name: Build
         run: make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
       - name: UCI smoke

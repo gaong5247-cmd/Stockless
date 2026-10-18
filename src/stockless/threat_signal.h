@@ -25,17 +25,18 @@ inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
          | pos.attacks_by<ROOK>(c) | pos.attacks_by<QUEEN>(c);
 }
 
-inline ThreatSignal compute_threat_signal(const Position& pos,
-                                          int             depth,
-                                          bool            importantNode) noexcept {
+inline ThreatSignal compute_threat_signal(const Position&      pos,
+                                          int                  depth,
+                                          bool                 importantNode,
+                                          const SearchSettings& settings) noexcept {
     ThreatSignal out{};
 
-    if (!hybrid_enabled() || !threats_enabled())
+    if (!settings.hybrid || !settings.threats)
         return out;
 
     // Full attack maps are useful but not free. Android gets the stricter gate
     // to preserve NPS/battery life. Deep/important nodes still receive it.
-    const int minDepth = mobile_profile() ? 7 : 5;
+    const int minDepth = settings.mobile ? 7 : 5;
     if (depth < minDepth && !importantNode)
         return out;
 

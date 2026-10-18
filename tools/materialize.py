@@ -153,8 +153,13 @@ def materialize(out: Path) -> None:
     node_anchor = """    MovePicker mp(pos, ttData.move, depth, &mainHistory, &lowPlyHistory, &captureHistory, contHist,
                   &sharedHistory, ss->ply);
 """
-    node_patch = """    const auto stocklessThreat =
-      Stockless::compute_threat_signal(pos, int(depth), ss->ttPv || PvNode || depth >= 8);
+    node_patch = """    // No atomic UCI option reloads in the hot per-move policy loop.
+    const auto stocklessSettings = Stockless::search_settings();
+    const auto stocklessThreat =
+      Stockless::compute_threat_signal(pos, int(depth), ss->ttPv || PvNode || depth >= 8,
+                                       stocklessSettings);
+    const int stocklessCorrectionSignal =
+      std::min(256, int(std::abs(correctionValue) / 131072));
 
 """ + node_anchor.replace(
         "                  &sharedHistory, ss->ply);\n",
@@ -169,16 +174,10 @@ def materialize(out: Path) -> None:
             r += 929;
 """
     policy_patch = policy_anchor + """
-        const int stocklessCorrectionSignal =
-          std::min(256, int(std::abs(correctionValue) / 131072));
-
         const auto stocklessPolicy = Stockless::make_search_policy({
           int(depth),
           moveCount,
           int(beta - alpha),
-          ss->staticEval == VALUE_NONE ? 0 : int(ss->staticEval),
-          int(alpha),
-          int(beta),
           stocklessCorrectionSignal,
           int((ss + 1)->cutoffCnt),
           improving,
@@ -189,20 +188,12 @@ def materialize(out: Path) -> None:
           PvNode,
           cutNode,
           stocklessThreat,
-        });
+        }, stocklessSettings);
 """
     replace_once(search_cpp, policy_anchor, policy_patch)
 
-    replace_once(
-        search_cpp,
-        """            if (moveCount >= (3 + depth * depth) / (2 - improving))
-                mp.skip_quiet_moves();
-""",
-        """            if (moveCount >= (3 + depth * depth) / (2 - improving)
-                              + stocklessPolicy.quietMoveAllowance)
-                mp.skip_quiet_moves();
-""",
-    )
+    # Stockless quietMoveAllowance was always zero: do not patch the native
+    # Stockfish late-move pruning threshold or carry a dead policy field.
 
     # Preserve the normal Stockfish history lifecycle.
     replace_once(

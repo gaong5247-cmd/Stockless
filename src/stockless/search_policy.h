@@ -11,9 +11,6 @@ struct SearchInputs {
     int depth;
     int moveCount;
     int window;
-    int staticEval;
-    int alpha;
-    int beta;
     int correctionSignal;
     int nextCutoffCount;
 
@@ -34,14 +31,14 @@ struct SearchPolicy {
     int volatility = 0;
     int lmrAdjustment = 0;
     int pruningDepthBoost = 0;
-    int quietMoveAllowance = 0;
     int reSearchDepthBonus = 0;
 };
 
-inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
+inline SearchPolicy make_search_policy(const SearchInputs& in,
+                                       const SearchSettings& settings) noexcept {
     SearchPolicy out{};
 
-    if (!hybrid_enabled())
+    if (!settings.hybrid)
         return out;
 
     int pressure = in.threat.attackPressure;
@@ -69,13 +66,13 @@ inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
     out.danger     = std::clamp(danger, 0, 256);
     out.volatility = std::clamp(volatility, 0, 256);
 
-    const int aggression = hybrid_aggression();
+    const int aggression = settings.aggression;
     const int tactical =
       std::clamp((3 * out.pressure + 2 * out.danger + 2 * out.volatility) / 7, 0, 256);
 
     // Base hybrid: strong enough to matter, but still much cheaper than the
     // broad v0.4 Overdrive experiment.
-    const int cap = mobile_profile() ? 320 : 640;
+    const int cap = settings.mobile ? 320 : 640;
     int buyback = tactical * aggression * cap / (256 * 100);
 
     if (in.cutNode && !in.ttPv && !in.capture && !in.givesCheck && tactical < 152)
@@ -87,7 +84,7 @@ inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
     // v0.5 Selective Overdrive:
     // never loosen quiet pruning globally. Only verified forcing geometry gets
     // the expensive treatment.
-    if (overdrive_enabled() && !mobile_profile())
+    if (settings.overdrive && !settings.mobile)
     {
         const bool forcingCheck = in.givesCheck && out.pressure >= 176;
         const bool kingEmergency = out.danger >= 224;
@@ -104,16 +101,13 @@ inline SearchPolicy make_search_policy(const SearchInputs& in) noexcept {
         if (forcingCheck && tactical >= 232 && in.depth >= 6)
             out.pruningDepthBoost = 2;
 
-        // No general late-quiet expansion: v0.4 testing showed it wastes nodes.
-        out.quietMoveAllowance = 0;
-
         if (forcingCheck && tactical >= 208)
             out.reSearchDepthBonus = 1;
         else if (forcingCapture && tactical >= 232 && in.pvNode)
             out.reSearchDepthBonus = 1;
     }
 
-    out.lmrAdjustment = -std::min(cap + (overdrive_enabled() ? 192 : 0), buyback);
+    out.lmrAdjustment = -std::min(cap + (settings.overdrive ? 192 : 0), buyback);
     return out;
 }
 
