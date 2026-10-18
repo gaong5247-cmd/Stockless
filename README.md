@@ -8,7 +8,7 @@
 
 **Repository:** https://github.com/gaong5247-cmd/Stockless
 
-**Stable version: v0.7.1.** This development branch uses **v0.7.2-dev.20261018.1** (pre-release), and its UCI reports `id name Stockless v0.7.2-dev.20261018.1`. The v0.7.1 main release is unchanged. [Dev release notes](docs/PRERELEASE_072.md).
+**Stable version: v0.7.1.** Latest fastpath candidate: **v0.7.2-dev.20261018.2** (pre-release), with UCI `id name Stockless v0.7.2-dev.20261018.2`. Stable v0.7.1 and earlier dev.1 remain unchanged. [Fastpath notes](docs/PRERELEASE_072_FASTPATH.md).
 
 **Implementation version: v0.7.1 (stable).** Its UCI handshake reports `id name Stockless v0.7.1` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
 
