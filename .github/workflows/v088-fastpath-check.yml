@@ -1,0 +1,116 @@
+name: v0.8.8-rc1 SFNNv18 fastpath performance and safety gate
+
+on:
+  push:
+    branches: [release/v088-rc1-sfnnv18-fastpath]
+    paths:
+      - ".github/workflows/v088-fastpath-check.yml"
+      - "src/stockless/**"
+      - "tools/materialize.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fastpath:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build modern v0.8.8-rc1 with SFNNv18 fastpath
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SHA=effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+          git -C upstream/stockfish fetch --no-tags --depth 1 origin "$SHA"
+          git -C upstream/stockfish checkout --detach "$SHA"
+          STOCKLESS_UPSTREAM_TRACK=modern-v18 python tools/materialize.py
+          grep -Fx "#define STOCKLESS_MODERN_DUAL_QUEENS 1" build/stockless-src/src/stockless_core/config.h
+          grep -Fx "Stockfish: $SHA" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/search_policy_test.cpp -o /tmp/search-policy-test
+          /tmp/search-policy-test
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/threat_history_test.cpp -o /tmp/history-test
+          /tmp/history-test
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          python tests/uci_history_smoke.py build/stockless-src/src/stockless
+          mkdir -p results/v088
+          printf 'uci\nisready\nquit\n' | build/stockless-src/src/stockless > results/v088/uci.txt
+          grep -Fx 'id name Stockless v0.8.8-rc1' results/v088/uci.txt
+
+      - name: Build frozen modern v0.8.2 for apples-to-apples comparison
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git worktree add --detach "$RUNNER_TEMP/stockless-v082" 65d2d1c724ebb62e81d451c9a977d807d24da2f7
+          git -C "$RUNNER_TEMP/stockless-v082" submodule update --init --recursive
+          (
+            cd "$RUNNER_TEMP/stockless-v082"
+            git -C upstream/stockfish fetch --no-tags --depth 1 origin effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+            git -C upstream/stockfish checkout --detach effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+            STOCKLESS_UPSTREAM_TRACK=modern-v18 python tools/materialize.py
+            make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          )
+          echo "BASELINE=$RUNNER_TEMP/stockless-v082/build/stockless-src/src/stockless" >> "$GITHUB_ENV"
+
+      - name: Verify unchanged search decisions and compare speed
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/compare_bench.py "$BASELINE" \
+            build/stockless-src/src/stockless \
+            --depth 12 --rounds 8 | tee results/v088/avx2-bench.txt
+
+      - name: Download fixed Cute Chess and official opening book
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check python-chess
+          curl -fL --retry 4 --retry-delay 3 -o results/v088/openings.zip \
+            'https://raw.githubusercontent.com/official-stockfish/books/master/6mvs_%2B90_%2B99.epd.zip'
+          python tools/split_history_book.py --source results/v088/openings.zip \
+            --profile full --seed 20261018 --output results/v088/book
+          curl -fL --retry 4 --retry-delay 3 -o cutechess.AppImage \
+            'https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage'
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+
+      - name: Run 200 paired-color games vs frozen modern v0.8.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          "$CUTECHESS" -tournament round-robin \
+            -engine name=Fastpath cmd="$PWD/build/stockless-src/src/stockless" option.Threads=1 option.Hash=32 \
+              option.StocklessSearchProfile=0 option.StocklessThreatHistory=false \
+            -engine name=ModernV082 cmd="$BASELINE" option.Threads=1 option.Hash=32 \
+              option.StocklessSearchProfile=0 option.StocklessThreatHistory=false \
+            -each proto=uci tc=0.2+0.002 -games 200 -repeat -concurrency 2 \
+            -openings file=results/v088/book/screen.epd format=epd order=random -srand 20261018 \
+            -pgnout results/v088/fastpath-vs-v082.pgn | tee results/v088/match.log
+          python tools/match_summary.py results/v088/fastpath-vs-v082.pgn Fastpath \
+            | tee results/v088/match-summary.txt
+
+      - name: Upload complete test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-v088-Fastpath-Validation
+          path: |
+            results/v088/*.txt
+            results/v088/*.log
+            results/v088/*.pgn
+            results/v088/book/manifest.json
+            build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          if-no-files-found: warn
