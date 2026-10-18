@@ -8,6 +8,8 @@
 
 **Repository:** https://github.com/gaong5247-cmd/Stockless
 
+**Live engine testing / Arena:** [OpenFishtest Arena](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — view match results and standings (maintained as a separate testing project).
+
 **Stable version: v0.7.1.** Latest fastpath candidate: **v0.7.2-dev.20261018.2** (pre-release), with UCI `id name Stockless v0.7.2-dev.20261018.2`. Stable v0.7.1 and earlier dev.1 remain unchanged. [Fastpath notes](docs/PRERELEASE_072_FASTPATH.md).
 
 **Implementation version: v0.7.1 (stable).** Its UCI handshake reports `id name Stockless v0.7.1` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
@@ -148,6 +150,8 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 # 한국어
 
 > Stockless는 Stockfish의 안정적인 C++ 엔진 기반 위에 Reckless의 연구 아이디어를 참고한 **독립적인 전술 인식형 탐색 정책**을 추가한 하이브리드 체스 엔진입니다. 두 엔진의 코드를 단순히 반반 합치거나 NNUE 가중치를 평균 낸 구조가 아닙니다.
+
+**실시간 엔진 대국 / 아레나:** [OpenFishtest Arena 바로가기](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — 엔진 대국 결과와 순위를 확인할 수 있는 별도 테스트 프로젝트입니다.
 
 **현재 소스 버전: v0.7.1.** UCI에서 날짜 접미사 없이 `id name Stockless v0.7.1`로 응답합니다. History ON은 성능 향상이 입증되지 않아 **기본 OFF**입니다.
 
