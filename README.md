@@ -10,7 +10,7 @@
 
 **Implementation version: v0.7.** Its UCI handshake reports `id name Stockless v0.7` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
 
-**Optimization candidate (not yet strength-verified):** [per-node policy snapshots, CPU-native PGO builds and rigorous bench gating](docs/OPTIMIZATION_20261018.md). Changes are on a review branch; no Elo gain is claimed.
+**Optimization candidate (not yet strength-verified):** [per-node policy snapshots, CPU-native PGO builds and rigorous bench gating](docs/OPTIMIZATION_20261018.md). Search fast-path changes are in the source; no Elo gain is claimed.
 
 **Experimental research:** [v0.7 threat-conditioned quiet history design, switches and reproducible A/B tests](docs/EXPERIMENT_07.md). This feature is OFF by default; no Elo gain is claimed.
 
