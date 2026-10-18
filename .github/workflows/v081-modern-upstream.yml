@@ -1,0 +1,154 @@
+name: Stockless v0.8.1 SFNNv18 upstream A/B vs v0.7
+
+on:
+  push:
+    branches: [experimental/v081-sfnnv18-upstream]
+    paths:
+      - ".github/workflows/v081-modern-upstream.yml"
+      - "tools/materialize.py"
+      - "tools/v08_strength_gate.py"
+      - "src/stockless/**"
+      - "tests/**"
+      - "arena/MODERN_V18_RUN"
+  workflow_dispatch:
+    inputs:
+      profile:
+        type: choice
+        options: [smoke, full]
+        default: smoke
+        description: "Short smoke first; full runs 5x200 + 800 paired games"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stockless-modern-v18-experiment
+  cancel-in-progress: false
+
+jobs:
+  modern-upstream-match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 320
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read explicitly selected profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE="$(cat arena/MODERN_V18_RUN)"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            PROFILE="$(python -c 'import json,os; print(json.load(open(os.environ["GITHUB_EVENT_PATH"]))["inputs"]["profile"])')"
+          fi
+          case "$PROFILE" in smoke|full) ;; *) echo "Unsupported $PROFILE"; exit 2 ;; esac
+          echo "PROFILE=$PROFILE" >> "$GITHUB_ENV"
+          echo "Running modern NNUE $PROFILE against frozen v0.7"
+
+      - name: Verify Python and pinned source manifests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m py_compile tools/materialize.py tools/v08_strength_gate.py
+          git -C upstream/stockfish rev-parse HEAD | tee legacy-submodule-sha.txt
+          test "$(cat legacy-submodule-sha.txt)" = "0a215d6c9e48856ef630013b8ab8312941a59057"
+
+      - name: Build frozen Stockless v0.7 independently
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git worktree add --detach "$RUNNER_TEMP/stockless-v07" 261d46be460cb8c83b2d883e8366bcc9d3f09b27
+          git -C "$RUNNER_TEMP/stockless-v07" submodule update --init --recursive
+          (
+            cd "$RUNNER_TEMP/stockless-v07"
+            python tools/materialize.py
+            make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          )
+          BASELINE="$RUNNER_TEMP/stockless-v07/build/stockless-src/src/stockless"
+          test -x "$BASELINE"
+          echo "BASELINE=$BASELINE" >> "$GITHUB_ENV"
+
+      - name: Fetch fixed SFNNv18 candidate without altering committed gitlink
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SHA=effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+          git -C upstream/stockfish fetch --no-tags --depth 1 origin "$SHA"
+          git -C upstream/stockfish checkout --detach "$SHA"
+          test "$(git -C upstream/stockfish rev-parse HEAD)" = "$SHA"
+          STOCKLESS_UPSTREAM_TRACK=modern-v18 python tools/materialize.py
+          grep -Fx "Upstream track: modern-v18" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          grep -Fx "Stockfish: $SHA" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          git ls-files -s upstream/stockfish | tee preserved-gitlink.txt
+          grep -F "0a215d6c9e48856ef630013b8ab8312941a59057" preserved-gitlink.txt
+
+      - name: Verify policies and compile modern Stockless
+        shell: bash
+        run: |
+          set -euxo pipefail
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/search_policy_test.cpp -o /tmp/search-policy
+          /tmp/search-policy
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/threat_history_test.cpp -o /tmp/threat-history
+          /tmp/threat-history
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          printf 'uci\nisready\nquit\n' | build/stockless-src/src/stockless | tee modern-uci.txt
+          grep -q '^id name Stockless v0.8.1-dev.20261018.1$' modern-uci.txt
+          grep -qx 'uciok' modern-uci.txt
+          grep -qx 'readyok' modern-uci.txt
+          python tests/uci_history_smoke.py build/stockless-src/src/stockless
+
+      - name: Install pinned book and Cute Chess
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check python-chess
+          mkdir -p results/books
+          curl -fL --retry 4 --retry-delay 3 \
+            -o results/books/official.epd.zip \
+            'https://raw.githubusercontent.com/official-stockfish/books/master/6mvs_%2B90_%2B99.epd.zip'
+          python tools/split_history_book.py \
+            --source results/books/official.epd.zip \
+            --profile "$PROFILE" \
+            --output results/openings --seed 20261018
+          curl -fL --retry 4 --retry-delay 3 \
+            -o cutechess.AppImage \
+            'https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage'
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+
+      - name: Compare modern NNUE and hybrid policies against frozen v0.7
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/v08_strength_gate.py \
+            --profile "$PROFILE" \
+            --candidate build/stockless-src/src/stockless \
+            --baseline "$BASELINE" \
+            --cutechess "$CUTECHESS" \
+            --book-manifest results/openings/manifest.json \
+            --candidates ModernDefault,HybridOff,Aggression110,Aggression175,Balanced \
+            --output results/v081-modern-strength --concurrency 2
+
+      - name: Preserve all match results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-v081-Modern-SFNNv18-Validation
+          path: |
+            results/openings/manifest.json
+            results/v081-modern-strength/
+            build/stockless-src/STOCKLESS_MATERIALIZED.txt
+            modern-uci.txt
+            preserved-gitlink.txt
+          if-no-files-found: warn
