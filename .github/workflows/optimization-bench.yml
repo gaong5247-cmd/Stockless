@@ -1,0 +1,76 @@
+name: optimization-benchmark
+
+# Deliberately opt-in / run once when this workflow is added to main.
+# A runner speed test is NOT a playing-strength claim.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/optimization-bench.yml"
+  workflow_dispatch:
+
+jobs:
+  deterministic-linux-bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate optimization tooling
+        run: |
+          python3 -m py_compile tools/compare_bench.py
+          bash -n scripts/build-optimized.sh
+
+      - name: Build current Stockless (standard AVX2)
+        run: |
+          python3 tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+
+      - name: Build frozen pre-optimization v0.7
+        run: |
+          git worktree add --detach ../stockless-v07 bb0479cbab709c3b6403048f3cb5fffe897b910c
+          git -C ../stockless-v07 submodule update --init --recursive
+          (
+            cd ../stockless-v07
+            python3 tools/materialize.py
+            make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          )
+
+      - name: Compare unmodified v0.7 to fast-path snapshot
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 tools/compare_bench.py \
+            ../stockless-v07/build/stockless-src/src/stockless \
+            build/stockless-src/src/stockless \
+            --depth 10 --rounds 4 2>&1 | tee before-after-bench.txt
+
+      - name: Build CPU-profiled candidate
+        run: |
+          cp build/stockless-src/src/stockless build/stockless-src/src/stockless-unprofiled
+          make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2
+
+      - name: Compare unprofiled to PGO (identical source and ISA)
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 tools/compare_bench.py \
+            build/stockless-src/src/stockless-unprofiled \
+            build/stockless-src/src/stockless \
+            --depth 10 --rounds 4 2>&1 | tee pgo-bench.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Stockless-optimization-benchmark
+          path: |
+            before-after-bench.txt
+            pgo-bench.txt
+          if-no-files-found: warn
