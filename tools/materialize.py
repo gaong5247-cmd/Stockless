@@ -70,6 +70,17 @@ def materialize(out: Path) -> None:
     target_overlay = out / "src" / "stockless_core"
     shutil.copytree(OVERLAY, target_overlay)
 
+    # The modern Stockfish revision supplies Attacks::both_attacks_bb().
+    # Inject the macro only into generated build sources. The legacy pinned
+    # Stockfish source retains its exact original attack map implementation.
+    if UPSTREAM_TRACK == "modern-v18":
+        config = target_overlay / "config.h"
+        text = config.read_text(encoding="utf-8")
+        config.write_text(
+            "#define STOCKLESS_MODERN_DUAL_QUEENS 1\n" + text,
+            encoding="utf-8",
+        )
+
     search_cpp = out / "src" / "search.cpp"
     search_h = out / "src" / "search.h"
     movepick_h = out / "src" / "movepick.h"
