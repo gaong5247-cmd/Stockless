@@ -52,7 +52,7 @@ jobs:
           $cmds = "uci`nsetoption name StocklessHybrid value true`nsetoption name StocklessAggression value 145`nsetoption name StocklessThreats value true`nsetoption name StocklessOverdrive value true`nisready`nquit`n"
           $cmds | & ".\dist\stockless-v0.7.1-windows-avx2.exe" | Tee-Object -FilePath ".\dist\uci-smoke.txt"
           $text = Get-Content ".\dist\uci-smoke.txt" -Raw
-          if ($text -notmatch "(?m)^id name Stockless v0[.]7[.]1[.]1\r?$") { throw "wrong engine id" }
+          if ($text -notmatch "(?m)^id name Stockless v0[.]7[.]1\r?$") { throw "wrong engine id" }
           if ($text -notmatch "option name StocklessAggression type spin default 145") { throw "wrong aggression default" }
           if ($text -notmatch "option name StocklessThreatHistory type check default false") { throw "wrong history default" }
           if ($text -notmatch "uciok") { throw "uci failed" }
