@@ -28,13 +28,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Record compiler and CPU capabilities
+      - name: Install matching LLVM 18 profiler and record compilers
         shell: bash
         run: |
           set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y llvm-18
+          command -v llvm-profdata-18
           g++ --version | head -1 | tee compiler-info.txt
           clang++ --version | head -1 | tee -a compiler-info.txt
-          llvm-profdata --version | head -1 | tee -a compiler-info.txt
+          llvm-profdata-18 --version | head -1 | tee -a compiler-info.txt
           uname -a | tee -a compiler-info.txt
           grep -m1 -E '^model name|^Features' /proc/cpuinfo | tee -a compiler-info.txt || true
 
@@ -62,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2 COMP=clang
+          make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2 COMP=clang LLVM_PROFDATA=llvm-profdata-18
           cp build/stockless-src/src/stockless results/compiler/stockless-clang-pgo
           chmod +x results/compiler/stockless-clang-pgo
 
