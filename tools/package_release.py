@@ -26,7 +26,7 @@ PLATFORMS = {
 
 def read_version() -> str:
     text = (ROOT / "src/stockless/config.h").read_text(encoding="utf-8")
-    match = re.search(r'inline constexpr const char\* Version = "(v[0-9]+\.[0-9]+\.[0-9]+)";', text)
+    match = re.search(r'inline constexpr const char\* Version = "(v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?)";', text)
     if match is None:
         raise RuntimeError("Expected a semantic UCI Version in src/stockless/config.h")
     return match.group(1)
