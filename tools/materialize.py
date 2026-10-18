@@ -327,7 +327,7 @@ def materialize(out: Path) -> None:
     replace_once(
         misc_cpp,
         '    if constexpr (version == "dev")\n',
-        '    if constexpr (false)  // Stockless has a fixed v0.7.1 identity\n',
+        '    if constexpr (false)  // Stockless has a fixed release identity\n',
     )
     replace_once(
         misc_cpp,

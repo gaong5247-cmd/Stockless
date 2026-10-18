@@ -8,7 +8,9 @@
 
 **Repository:** https://github.com/gaong5247-cmd/Stockless
 
-**Implementation version: v0.7.1.** Its UCI handshake reports `id name Stockless v0.7.1` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
+**Stable version: v0.7.1.** This development branch uses **v0.7.2-dev.20261018.1** (pre-release), and its UCI reports `id name Stockless v0.7.2-dev.20261018.1`. The v0.7.1 main release is unchanged. [Dev release notes](docs/PRERELEASE_072.md).
+
+**Implementation version: v0.7.1 (stable).** Its UCI handshake reports `id name Stockless v0.7.1` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
 
 **Universal release v0.7.1:** [platform downloads and CPU automatic selection](docs/UNIVERSAL_RELEASE.md). Universal x86-64 and Android ARM64 binaries keep the v0.7 optimization changes; no Elo gain over v0.7 is claimed.
 

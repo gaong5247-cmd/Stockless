@@ -39,7 +39,7 @@ def main() -> None:
         else Path("build/stockless-src/src/stockless")
     )
     config = (Path(__file__).resolve().parents[1] / "src/stockless/config.h").read_text(encoding="utf-8")
-    match = re.search(r'inline constexpr const char\* Version = "(v[0-9]+\.[0-9]+\.[0-9]+)";', config)
+    match = re.search(r'inline constexpr const char\* Version = "(v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?)";', config)
     if match is None:
         raise RuntimeError("Could not resolve Stockless UCI version from config.h")
     version = match.group(1)
