@@ -19,6 +19,14 @@ from history_stats import analyze_pgn, format_result
 TARGET = 0.55
 CANDIDATES = (
     {"name": "ModernDefault", "profile": 0, "aggression": 145, "hybrid": True},
+    {"name": "HistoryW10", "profile": 0, "aggression": 145, "hybrid": True,
+     "history": True, "history_weight": 10},
+    {"name": "HistoryW20", "profile": 0, "aggression": 145, "hybrid": True,
+     "history": True, "history_weight": 20},
+    {"name": "HistoryW35", "profile": 0, "aggression": 145, "hybrid": True,
+     "history": True, "history_weight": 35},
+    {"name": "HistoryW50", "profile": 0, "aggression": 145, "hybrid": True,
+     "history": True, "history_weight": 50},
     {"name": "HybridOff", "profile": 0, "aggression": 145, "hybrid": False},
     {"name": "Aggression80", "profile": 0, "aggression": 80, "hybrid": True},
     {"name": "Aggression110", "profile": 0, "aggression": 110, "hybrid": True},
@@ -32,13 +40,17 @@ CANDIDATES = (
 def engine(name: str, path: Path, profile: dict | None) -> list[str]:
     hybrid = True if profile is None else profile["hybrid"]
     aggression = 145 if profile is None else profile["aggression"]
+    history = False if profile is None else profile.get("history", False)
+    history_weight = 100 if profile is None else profile.get("history_weight", 100)
     args = [
         "-engine", f"name={name}", f"cmd={path.resolve()}", f"dir={path.resolve().parent}",
         "option.Threads=1", "option.Hash=32", "option.MoveOverhead=1",
         f"option.StocklessHybrid={'true' if hybrid else 'false'}",
         f"option.StocklessAggression={aggression}",
         "option.StocklessThreats=true", "option.StocklessOverdrive=false",
-        "option.StocklessMobile=false", "option.StocklessThreatHistory=false",
+        "option.StocklessMobile=false",
+        f"option.StocklessThreatHistory={'true' if history else 'false'}",
+        f"option.StocklessHistoryWeight={history_weight}",
     ]
     if profile is not None:
         args.append(f"option.StocklessSearchProfile={profile['profile']}")
