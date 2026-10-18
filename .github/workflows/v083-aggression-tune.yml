@@ -1,0 +1,146 @@
+name: Stockless v0.8.3 PGO adaptive UCI tuning vs v0.7
+
+on:
+  push:
+    branches: [experimental/v083-55pct-uci-tuning]
+    paths:
+      - ".github/workflows/v083-aggression-tune.yml"
+      - "arena/V083_TUNE_RUN"
+      - "tools/v08_strength_gate.py"
+  workflow_dispatch:
+    inputs:
+      profile:
+        type: choice
+        options: [smoke, full]
+        default: smoke
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stockless-v083-modern-pgo-aggression
+  cancel-in-progress: false
+
+jobs:
+  pgo-study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 320
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read experiment profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE="$(cat arena/V083_TUNE_RUN)"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            PROFILE="$(python -c 'import json,os; print(json.load(open(os.environ["GITHUB_EVENT_PATH"]))["inputs"]["profile"])')"
+          fi
+          case "$PROFILE" in smoke|full) ;; *) exit 2 ;; esac
+          echo "PROFILE=$PROFILE" >> "$GITHUB_ENV"
+          python -m py_compile tools/materialize.py tools/v08_strength_gate.py
+
+      - name: Build frozen v0.7 comparator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git worktree add --detach "$RUNNER_TEMP/stockless-v07" 261d46be460cb8c83b2d883e8366bcc9d3f09b27
+          git -C "$RUNNER_TEMP/stockless-v07" submodule update --init --recursive
+          (
+            cd "$RUNNER_TEMP/stockless-v07"
+            python tools/materialize.py
+            make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          )
+          BASELINE="$RUNNER_TEMP/stockless-v07/build/stockless-src/src/stockless"
+          test -x "$BASELINE"
+          echo "BASELINE=$BASELINE" >> "$GITHUB_ENV"
+
+      - name: Build one fixed modern source normally
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SHA=effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+          git -C upstream/stockfish fetch --no-tags --depth 1 origin "$SHA"
+          git -C upstream/stockfish checkout --detach "$SHA"
+          STOCKLESS_UPSTREAM_TRACK=modern-v18 python tools/materialize.py
+          grep -Fx "Stockfish: $SHA" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          grep -Fx "Upstream track: modern-v18" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          cp build/stockless-src/src/stockless build/stockless-src/src/stockless-standard
+          chmod +x build/stockless-src/src/stockless-standard
+          printf 'uci\nquit\n' | build/stockless-src/src/stockless-standard > standard-uci.txt
+          grep -q '^id name Stockless v0.8.1-dev.20261018.1$' standard-uci.txt
+
+      - name: PGO train on fixed Stockfish bench without changing code
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2
+          cp build/stockless-src/src/stockless build/stockless-src/src/stockless-pgo
+          chmod +x build/stockless-src/src/stockless-pgo
+          printf 'uci\nquit\n' | build/stockless-src/src/stockless-pgo > pgo-uci.txt
+          diff -u standard-uci.txt pgo-uci.txt
+
+      - name: Require identical search signature and measure NPS
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/compare_bench.py \
+            build/stockless-src/src/stockless-standard \
+            build/stockless-src/src/stockless-pgo \
+            --depth 11 --rounds 6 | tee pgo-speed-validation.txt
+          python tests/uci_history_smoke.py build/stockless-src/src/stockless-pgo
+
+      - name: Acquire official opening holdout and fixed Cute Chess
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check python-chess
+          mkdir -p results/books
+          curl -fL --retry 4 --retry-delay 3 -o results/books/official.epd.zip \
+            'https://raw.githubusercontent.com/official-stockfish/books/master/6mvs_%2B90_%2B99.epd.zip'
+          python tools/split_history_book.py --source results/books/official.epd.zip \
+            --profile "$PROFILE" --output results/openings --seed 20261022
+          curl -fL --retry 4 --retry-delay 3 -o cutechess.AppImage \
+            'https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage'
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+
+      - name: Run eight fixed candidate UCI configurations against frozen v0.7
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/v08_strength_gate.py \
+            --profile "$PROFILE" \
+            --candidate build/stockless-src/src/stockless-pgo \
+            --baseline "$BASELINE" \
+            --cutechess "$CUTECHESS" \
+            --book-manifest results/openings/manifest.json \
+            --candidates ModernDefault,Aggression135,Aggression140,Aggression150,Aggression155,Aggression160,Overdrive145,ThreatsOff145 \
+            --output results/v083-aggression --concurrency 2
+
+      - name: Upload complete evidence, never auto-promote
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Stockless-v083-55pct-UCI-Tuning
+          path: |
+            pgo-speed-validation.txt
+            standard-uci.txt
+            pgo-uci.txt
+            build/stockless-src/STOCKLESS_MATERIALIZED.txt
+            results/openings/manifest.json
+            results/v083-aggression/
+          if-no-files-found: warn
