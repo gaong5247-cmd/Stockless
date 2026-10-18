@@ -1,0 +1,95 @@
+name: Verify final Stockless v0.8 binary releases and retired previews
+
+on:
+  push:
+    branches: [release/publish-v08-series]
+    paths: [".github/workflows/verify-v08-final-publishing.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit nine releases, 27 ZIPs, checksums and two retired preview tags
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/publish-v08-series
+
+      - name: Check GitHub Releases and all advertised checksum manifests
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess, tempfile
+          from pathlib import Path
+
+          repo = "gaong5247-cmd/Stockless"
+          entries = json.loads(Path("release/v08-series-manifest.json").read_text(encoding="utf-8"))["releases"]
+          if len(entries) != 9:
+              raise SystemExit("Invalid release count")
+          platforms = ("windows-x86_64-universal", "linux-x86_64-universal", "android-arm64-universal")
+
+          def github(*args):
+              return subprocess.check_output(["gh", *args], text=True)
+
+          summary = []
+          with tempfile.TemporaryDirectory(prefix="stockless-verify-") as tmp:
+              for entry in entries:
+                  tag, version = entry["tag"], entry["version"]
+                  data = json.loads(github("api", f"repos/{repo}/releases/tags/{tag}"))
+                  if data.get("draft") or data.get("prerelease") != entry["prerelease"]:
+                      raise SystemExit(f"{tag}: wrong release state")
+                  if data.get("tag_name") != tag:
+                      raise SystemExit(f"{tag}: tag mismatch")
+                  github("api", f"repos/{repo}/git/ref/tags/{tag}")
+                  expected = {f"Stockless-{version}-{p}.zip" for p in platforms}
+                  expected.add("SHA256SUMS.txt")
+                  assets = {a["name"]: a for a in data.get("assets", [])}
+                  if set(assets) != expected:
+                      raise SystemExit(f"{tag}: missing/extra artifacts: {set(assets) ^ expected}")
+                  folder = Path(tmp) / version
+                  folder.mkdir()
+                  subprocess.run(
+                      ["gh", "release", "download", tag, "--repo", repo,
+                       "--pattern", "SHA256SUMS.txt", "--dir", str(folder)],
+                      check=True,
+                  )
+                  parsed = {}
+                  for row in (folder / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines():
+                      digest, filename = row.split(None, 1)
+                      parsed[filename.strip()] = digest.lower()
+                  if set(parsed) != expected - {"SHA256SUMS.txt"}:
+                      raise SystemExit(f"{tag}: checksum manifest does not list exact ZIP set")
+                  for file, digest in parsed.items():
+                      asset = assets[file]
+                      if asset.get("size", 0) <= 0:
+                          raise SystemExit(f"{tag}: zero-size ZIP {file}")
+                      if asset.get("digest") != f"sha256:{digest}":
+                          raise SystemExit(f"{tag}: digest does not match GitHub metadata for {file}")
+                  summary.append(f"PASS {tag}: 3 ZIP assets + validated SHA256SUMS.txt")
+
+          for tag in ("Stockless_v0.7.2-dev.20261018.1", "Stockless_v0.7.2-dev.20261018.2"):
+              for suffix in (f"releases/tags/{tag}", f"git/ref/tags/{tag}"):
+                  result = subprocess.run(
+                      ["gh", "api", f"repos/{repo}/{suffix}"],
+                      text=True, capture_output=True,
+                  )
+                  if result.returncode == 0 or "404" not in result.stderr:
+                      raise SystemExit(f"Expected 404 for retired {suffix}: {result.stderr}")
+              summary.append(f"PASS retired: {tag} (release and Git tag both absent)")
+
+          for tag in ("Stockless_v0.7", "Stockless_v0.7.1"):
+              github("api", f"repos/{repo}/releases/tags/{tag}")
+              summary.append(f"PASS preserved stable historical release: {tag}")
+
+          print("\n".join(summary))
+          print("SUCCESS: 9 releases, 27 verified ZIP digests, 9 checksum manifests, 2 obsolete prereleases retired")
+          out = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          out.write_text("# Final Stockless v0.8 release audit\n\n" + "\n\n".join(summary) + "\n", encoding="utf-8")
+          PY
