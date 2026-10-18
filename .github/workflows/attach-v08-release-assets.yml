@@ -1,0 +1,247 @@
+name: Build and attach Stockless v0.8 binaries then retire two obsolete previews
+
+on:
+  push:
+    branches: [release/publish-v08-series]
+    paths: [".github/workflows/attach-v08-release-assets.yml", "release/ATTACH_BINARY_ASSETS"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stockless-v08-asset-publisher
+  cancel-in-progress: false
+
+jobs:
+  catalog:
+    runs-on: ubuntu-24.04
+    outputs:
+      entries: ${{ steps.emit.outputs.entries }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: emit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          entries = json.load(open("release/v08-series-manifest.json"))["releases"]
+          if len(entries) != 9: raise SystemExit("Need 9 source releases")
+          for item in entries:
+              subprocess.run(["gh", "release", "view", item["tag"]], check=True, stdout=subprocess.DEVNULL)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("entries=" + json.dumps(entries, separators=(",", ":")) + "\n")
+          PY
+
+  build:
+    needs: catalog
+    name: ${{ matrix.release.version }} / ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        release: ${{ fromJson(needs.catalog.outputs.entries) }}
+        platform:
+          - {name: linux-x86_64-universal, runner: ubuntu-24.04}
+          - {name: windows-x86_64-universal, runner: windows-2022}
+          - {name: android-arm64-universal, runner: ubuntu-24.04}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.release.tag }}
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify UCI source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Version = "${{ matrix.release.version }}"' src/stockless/config.h
+          echo "SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          python -m py_compile tools/materialize.py tools/package_release.py
+      - name: Select fixed modern upstream NNUE
+        if: matrix.release.modern
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C upstream/stockfish fetch --no-tags --depth 1 origin effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+          git -C upstream/stockfish checkout --detach effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+          echo 'STOCKLESS_UPSTREAM_TRACK=modern-v18' >> "$GITHUB_ENV"
+          echo 'STOCKLESS_EXPERIMENTAL_DUAL_QUEENS=0' >> "$GITHUB_ENV"
+      - name: Materialize selected source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/materialize.py
+          grep -Fx 'Stockless: ${{ matrix.release.version }}' build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          if [ '${{ matrix.release.modern }}' = 'true' ]; then
+            grep -Fx 'Stockfish: effdc3fd3f6de6e75fe1374a51a7a7eed66f880b' build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          fi
+      - name: Compile/test/package Linux Universal
+        if: matrix.platform.name == 'linux-x86_64-universal'
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C build/stockless-src/src -j3 build ARCH=x86-64-universal
+          printf 'uci\nisready\nquit\n' | build/stockless-src/src/stockless > uci.txt
+          grep -Fx 'id name Stockless ${{ matrix.release.version }}' uci.txt
+          grep -Fx 'uciok' uci.txt
+          grep -Fx 'readyok' uci.txt
+          build/stockless-src/src/stockless bench 16 1 6 default depth > bench.txt 2>&1
+          grep -q 'Nodes searched' bench.txt
+          python tools/package_release.py --platform linux-x86_64-universal --binary build/stockless-src/src/stockless --source-sha "$SOURCE_SHA"
+      - uses: msys2/setup-msys2@v2
+        if: matrix.platform.name == 'windows-x86_64-universal'
+        with:
+          msystem: mingw64
+          update: true
+          install: make git curl mingw-w64-x86_64-gcc
+      - name: Compile Windows Universal
+        if: matrix.platform.name == 'windows-x86_64-universal'
+        shell: msys2 {0}
+        run: |
+          make -C build/stockless-src/src -j3 build ARCH=x86-64-universal COMP=mingw
+          test -s build/stockless-src/src/stockless.exe
+      - name: Verify and package Windows
+        if: matrix.platform.name == 'windows-x86_64-universal'
+        shell: pwsh
+        run: |
+          $result = @("uci","isready","quit") | & ".\build\stockless-src\src\stockless.exe"
+          if ($LASTEXITCODE -ne 0 -or $result -notcontains "id name Stockless ${{ matrix.release.version }}" -or $result -notcontains "uciok" -or $result -notcontains "readyok") { throw "Bad Windows UCI" }
+          python tools/package_release.py --platform windows-x86_64-universal --binary build/stockless-src/src/stockless.exe --source-sha "$env:SOURCE_SHA"
+      - name: Acquire Android NDK r27c
+        if: matrix.platform.name == 'android-arm64-universal'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot=/usr/local/lib/android/sdk
+          sdkmanager=$(find "$sdkroot/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -1)
+          test -x "$sdkmanager"
+          set +o pipefail
+          yes | "$sdkmanager" "ndk;27.2.12479018"
+          rc=$?
+          set -o pipefail
+          test "$rc" -eq 0
+          echo "NDK=$sdkroot/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Compile and package Android ARM64 Universal
+        if: matrix.platform.name == 'android-arm64-universal'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          make -C build/stockless-src/src -j3 build ARCH=arm64-universal COMP=ndk COMPCXX=aarch64-linux-android26-clang++
+          llvm-readelf -h build/stockless-src/src/stockless | tee elf.txt
+          grep -Eq 'Machine:.*AArch64' elf.txt
+          python tools/package_release.py --platform android-arm64-universal --binary build/stockless-src/src/stockless --source-sha "$SOURCE_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v08-${{ matrix.release.version }}-${{ matrix.platform.name }}
+          path: dist/Stockless-${{ matrix.release.version }}-${{ matrix.platform.name }}.zip
+          if-no-files-found: error
+      - name: Attach complete ZIP to published version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ matrix.release.tag }}
+          FILE: dist/Stockless-${{ matrix.release.version }}-${{ matrix.platform.name }}.zip
+        run: |
+          set -euo pipefail
+          test -s "$FILE"
+          name=$(basename "$FILE")
+          if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+            echo "Archive already present; never overwrite $name"
+          else
+            gh release upload "$TAG" "$FILE"
+          fi
+
+  finalize:
+    name: Attach verified checksums / ${{ matrix.release.tag }}
+    needs: [catalog, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJson(needs.catalog.outputs.entries) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/publish-v08-series
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: v08-${{ matrix.release.version }}-*
+          path: release-assets
+          merge-multiple: true
+      - name: Validate all three ZIPs including embedded binary SHA and source commit
+        shell: bash
+        env:
+          TAG: ${{ matrix.release.tag }}
+          VERSION: ${{ matrix.release.version }}
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+          sha=$(git rev-parse "$TAG^{commit}")
+          python release/verify_packages.py --version "$VERSION" --source-commit "$sha" --directory release-assets
+      - name: Attach SHA256SUMS and verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ matrix.release.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq SHA256SUMS.txt; then
+            echo "Existing checksum manifest preserved"
+          else
+            gh release upload "$TAG" release-assets/SHA256SUMS.txt
+          fi
+          count=$(gh release view "$TAG" --json assets --jq '.assets | length')
+          test "$count" -eq 4
+
+  retire:
+    name: Remove EXACT two v0.7.2 old prereleases after all nine replacements are complete
+    needs: [catalog, build, finalize]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Verify 9 successors then delete old preview IDs and tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo=gaong5247-cmd/Stockless
+          for tag in Stockless_v0.8 Stockless_v0.8.1 Stockless_v0.8.2 Stockless_v0.8.3 Stockless_v0.8.4 Stockless_v0.8.5 Stockless_v0.8.6 Stockless_v0.8.7 Stockless_v0.8.8-rc1; do
+            data=$(gh api "repos/$repo/releases/tags/$tag")
+            test "$(jq -r .draft <<< "$data")" = false
+            test "$(jq '.assets | length' <<< "$data")" -eq 4
+            if [ "$tag" = Stockless_v0.8.8-rc1 ]; then
+              test "$(jq -r .prerelease <<< "$data")" = true
+            else
+              test "$(jq -r .prerelease <<< "$data")" = false
+            fi
+          done
+          for pair in '416187361 Stockless_v0.7.2-dev.20261018.1' '416190672 Stockless_v0.7.2-dev.20261018.2'; do
+            id=$(echo "$pair" | cut -d' ' -f1)
+            tag=$(echo "$pair" | cut -d' ' -f2)
+            data=$(gh api "repos/$repo/releases/$id")
+            test "$(jq -r .tag_name <<< "$data")" = "$tag"
+            test "$(jq -r .prerelease <<< "$data")" = true
+          done
+          for pair in '416187361 Stockless_v0.7.2-dev.20261018.1' '416190672 Stockless_v0.7.2-dev.20261018.2'; do
+            id=$(echo "$pair" | cut -d' ' -f1)
+            tag=$(echo "$pair" | cut -d' ' -f2)
+            gh api -X DELETE "repos/$repo/releases/$id"
+            gh api -X DELETE "repos/$repo/git/refs/tags/$tag"
+            echo "Removed verified obsolete prerelease $tag"
+          done
+          gh release view Stockless_v0.7.1 --json tagName,url
+          gh release view Stockless_v0.8.8-rc1 --json tagName,isPrerelease,url
