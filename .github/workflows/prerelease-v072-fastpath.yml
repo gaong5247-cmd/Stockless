@@ -1,0 +1,297 @@
+name: Stockless v0.7.2-dev.20261018.2 Threat Fastpath prerelease
+
+on:
+  push:
+    branches: ["prerelease/v0.7.2-threat-fastpath"]
+  workflow_dispatch:
+
+concurrency:
+  group: universal-v072-fastpath-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    name: Linux x86-64 Universal (CPU dispatch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate release scripts and dev version
+        run: |
+          python -m py_compile tools/package_release.py tools/verify_release_assets.py tests/uci_history_smoke.py
+          python -c "from tools.package_release import read_version; assert read_version() == 'v0.7.2-dev.20261018.2'"
+      - name: Materialize exact pinned Stockfish and Stockless
+        run: python tools/materialize.py
+      - name: Build all supported x86-64 instruction-set slices
+        run: make -C build/stockless-src/src -j4 build ARCH=x86-64-universal
+      - name: UCI protocol and actual search
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=build/stockless-src/src/stockless
+          test -x "$BIN"
+          printf 'uci\nisready\nquit\n' | "$BIN" | tee linux-uci.txt
+          grep -qx 'id name Stockless v0.7.2-dev.20261018.2' linux-uci.txt
+          grep -qx 'uciok' linux-uci.txt
+          grep -qx 'readyok' linux-uci.txt
+          "$BIN" bench 16 1 8 default depth 2>&1 | tee linux-bench.txt
+          grep -q 'Nodes searched' linux-bench.txt
+          file "$BIN"
+      - name: Search-policy regression checks
+        shell: bash
+        run: |
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/threat_history_test.cpp -o threat_history_test
+          ./threat_history_test
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/search_policy_test.cpp -o search_policy_test
+          ./search_policy_test
+          python tests/uci_history_smoke.py build/stockless-src/src/stockless
+      - name: Package Linux x86-64 Universal
+        run: |
+          python tools/package_release.py --platform linux-x86_64-universal \
+            --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockless-v0.7.2-dev.20261018.2-linux-x86_64-universal
+          path: dist/Stockless-v0.7.2-dev.20261018.2-linux-x86_64-universal.zip
+          if-no-files-found: error
+
+  linux-arm64:
+    name: Linux ARM64 Universal (NEON/DotProd dispatch)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Materialize sources
+        run: python tools/materialize.py
+      - name: Compile arm64 universal
+        run: make -C build/stockless-src/src -j4 build ARCH=arm64-universal
+      - name: UCI and bench
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=build/stockless-src/src/stockless
+          printf 'uci\nisready\nquit\n' | "$BIN" | tee arm64-uci.txt
+          grep -qx 'id name Stockless v0.7.2-dev.20261018.2' arm64-uci.txt
+          grep -qx 'readyok' arm64-uci.txt
+          "$BIN" bench 16 1 8 default depth 2>&1 | tee arm64-bench.txt
+          grep -q 'Nodes searched' arm64-bench.txt
+      - name: Package Linux ARM64
+        run: |
+          python tools/package_release.py --platform linux-arm64-universal \
+            --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockless-v0.7.2-dev.20261018.2-linux-arm64-universal
+          path: dist/Stockless-v0.7.2-dev.20261018.2-linux-arm64-universal.zip
+          if-no-files-found: error
+
+  windows-x86_64:
+    name: Windows x86-64 Universal (CPU dispatch)
+    runs-on: windows-2022
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Materialize sources
+        shell: pwsh
+        run: python tools/materialize.py
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          update: true
+          install: >-
+            make
+            git
+            mingw-w64-x86_64-gcc
+      - name: Build universal Windows exe
+        shell: msys2 {0}
+        run: |
+          make -C build/stockless-src/src -j4 build ARCH=x86-64-universal COMP=mingw
+          test -s build/stockless-src/src/stockless.exe
+      - name: UCI smoke test on Windows
+        shell: pwsh
+        run: |
+          $bin = ".\build\stockless-src\src\stockless.exe"
+          if (-not (Test-Path $bin)) { throw "Missing universal Windows exe" }
+          $uci = @("uci", "isready", "quit") | & $bin
+          if ($LASTEXITCODE -ne 0) { throw "UCI engine exited with $LASTEXITCODE" }
+          if ($uci -notcontains "id name Stockless v0.7.2-dev.20261018.2") { throw "Wrong UCI version: $uci" }
+          if ($uci -notcontains "uciok" -or $uci -notcontains "readyok") { throw "UCI handshake failed" }
+          & $bin bench 16 1 8 default depth 2>&1 | Tee-Object -FilePath windows-bench.txt
+          if ($LASTEXITCODE -ne 0) { throw "Universal Windows bench failed" }
+          if (-not (Select-String -Path windows-bench.txt -Pattern "Nodes searched")) {
+            throw "Missing bench nodes"
+          }
+      - name: Package Windows universal
+        shell: pwsh
+        run: |
+          python tools/package_release.py --platform windows-x86_64-universal `
+            --binary build/stockless-src/src/stockless.exe --source-sha "$env:GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockless-v0.7.2-dev.20261018.2-windows-x86_64-universal
+          path: dist/Stockless-v0.7.2-dev.20261018.2-windows-x86_64-universal.zip
+          if-no-files-found: error
+
+  android:
+    name: Android ${{ matrix.abi }} (NDK API 26)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-universal
+            arch: arm64-universal
+            compiler: aarch64-linux-android26-clang++
+            elf: AArch64
+          - abi: armeabi-v7a
+            arch: armv7-neon
+            compiler: armv7a-linux-androideabi26-clang++
+            elf: ARM
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Android NDK r27c (Android 8+)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT=/usr/local/lib/android/sdk
+          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -1)
+          test -x "$SDKMANAGER"
+          set +o pipefail
+          yes | "$SDKMANAGER" "ndk;27.2.12479018"
+          SDK_RC=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$SDK_RC" -eq 0
+          test -d "$SDK_ROOT/ndk/27.2.12479018"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+      - name: Materialize sources
+        run: python tools/materialize.py
+      - name: Compile Android native UCI
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NDK="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+          export PATH="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          make -C build/stockless-src/src -j3 build \
+            ARCH=${{ matrix.arch }} COMP=ndk COMPCXX=${{ matrix.compiler }}
+          test -s build/stockless-src/src/stockless
+          llvm-readelf -h build/stockless-src/src/stockless | tee android-elf.txt
+          grep -Eiq 'Machine:.*${{ matrix.elf }}' android-elf.txt
+          llvm-readelf -d build/stockless-src/src/stockless | tee android-dynamic.txt
+      - name: Package Android UCI engine
+        run: |
+          python tools/package_release.py --platform android-${{ matrix.abi }} \
+            --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockless-v0.7.2-dev.20261018.2-android-${{ matrix.abi }}
+          path: dist/Stockless-v0.7.2-dev.20261018.2-android-${{ matrix.abi }}.zip
+          if-no-files-found: error
+
+  fastpath-validation:
+    name: Threat fastpath vs frozen dev.1 (NPS + exact node counts)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile candidate AVX2
+        run: |
+          python3 tools/materialize.py
+          make -C build/stockless-src/src -j3 build ARCH=x86-64-avx2
+      - name: Compile frozen dev.1 baseline with identical compiler and flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach ../stockless-dev1 1a3050a60c2115366f7de607da612c3546b6bc4f
+          git -C ../stockless-dev1 submodule update --init --recursive
+          (
+            cd ../stockless-dev1
+            python3 tools/materialize.py
+            make -C build/stockless-src/src -j3 build ARCH=x86-64-avx2
+          )
+      - name: Exact-node search equivalence and interleaved NPS comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/compare_bench.py \
+            ../stockless-dev1/build/stockless-src/src/stockless \
+            build/stockless-src/src/stockless \
+            --depth 11 --rounds 6 2>&1 | tee threat-fastpath-bench.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stockless-v0.7.2-dev.20261018.2-fastpath-bench
+          path: threat-fastpath-bench.txt
+          if-no-files-found: warn
+
+
+  publish:
+    name: Publish verified v0.7.2-dev.20261018.2 Fastpath
+    needs: [linux-x86_64, linux-arm64, windows-x86_64, android, fastpath-validation]
+    if: >-
+      github.ref == 'refs/heads/prerelease/v0.7.2-threat-fastpath' &&
+      github.repository == 'gaong5247-cmd/Stockless'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stockless-v0.7.2-dev.20261018.2-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify all OS archives, UCI version, checksums and manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/verify_release_assets.py release-assets --expected-commit "$GITHUB_SHA"
+          (cd release-assets && sha256sum *.zip > SHA256SUMS.txt)
+          cat release-assets/SHA256SUMS.txt
+      - name: Publish GitHub Release (fail on existing tag)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=Stockless_v0.7.2-dev.20261018.2
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite a published release" >&2
+            exit 1
+          fi
+          gh release create "$TAG" release-assets/*.zip release-assets/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "Stockless v0.7.2-dev.20261018.2 — DEV Preview (Windows, Linux, Android)" \
+            --notes-file docs/PRERELEASE_072_FASTPATH.md \
+            --prerelease
+          gh release view "$TAG" --json url,tagName,assets

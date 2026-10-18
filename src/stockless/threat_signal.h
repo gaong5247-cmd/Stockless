@@ -20,9 +20,27 @@ struct ThreatSignal {
     int tacticalVolatility = 0;
 };
 
+// Exact attack-map fastpath: load occupied squares once, then group the
+// slider attack loops. Queens participate in *both* bishop and rook rays,
+// matching Position::attacks_by<QUEEN>() without an extra queen dispatch.
+// Knights are occupancy independent. No king attacks were present in v0.7.
 inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
-    return pos.attacks_by<PAWN>(c) | pos.attacks_by<KNIGHT>(c) | pos.attacks_by<BISHOP>(c)
-         | pos.attacks_by<ROOK>(c) | pos.attacks_by<QUEEN>(c);
+    Bitboard attacks = pos.attacks_by<PAWN>(c);
+    const Bitboard occupied = pos.pieces();
+
+    Bitboard knights = pos.pieces(c, KNIGHT);
+    while (knights)
+        attacks |= Attacks::attacks_bb(KNIGHT, pop_lsb(knights));
+
+    Bitboard diagonals = pos.pieces(c, BISHOP, QUEEN);
+    while (diagonals)
+        attacks |= Attacks::attacks_bb(BISHOP, pop_lsb(diagonals), occupied);
+
+    Bitboard orthogonals = pos.pieces(c, ROOK, QUEEN);
+    while (orthogonals)
+        attacks |= Attacks::attacks_bb(ROOK, pop_lsb(orthogonals), occupied);
+
+    return attacks;
 }
 
 inline ThreatSignal compute_threat_signal(const Position&      pos,
