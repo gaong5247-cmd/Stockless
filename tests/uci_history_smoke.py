@@ -80,6 +80,7 @@ def main() -> None:
                 "option name StocklessThreats type check default true",
                 "option name StocklessOverdrive type check default false",
                 "option name StocklessThreatHistory type check default false",
+                "option name StocklessSearchProfile type spin default 0 min 0 max 3",
                 "option name StocklessHistoryWeight type spin default 100 min 0 max 200",
             }
             missing = sorted(required.difference(header))
@@ -101,6 +102,20 @@ def main() -> None:
                 if best.split()[1] in {"(none)", "0000"}:
                     raise AssertionError(f"Unexpected bestmove: {best}")
                 print(f"ThreatHistory={enabled}: {best}")
+            # Search modes are opt-in and must all deliver legal-looking UCI
+            # moves without hangs or process crashes.
+            for mode in (0, 1, 2, 3):
+                send("ucinewgame")
+                send("setoption name StocklessThreatHistory value false")
+                send(f"setoption name StocklessSearchProfile value {mode}")
+                send("isready")
+                wait_for(lines, "readyok")
+                send("position startpos")
+                send("go depth 6")
+                best = wait_for(lines, "bestmove ", 60.0)
+                if best.split()[1] in {"(none)", "0000"}:
+                    raise AssertionError(f"SearchProfile={mode} returned {best}")
+                print(f"SearchProfile={mode}: {best}")
         finally:
             if proc.poll() is None:
                 send("quit")

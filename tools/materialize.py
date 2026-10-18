@@ -277,6 +277,12 @@ def materialize(out: Path) -> None:
       }));
 
     options.add(
+      "StocklessSearchProfile", Option(Stockless::default_search_profile(), 0, 3, [](const Option& o) {
+          Stockless::set_search_profile(int(o));
+          return std::nullopt;
+      }));
+
+    options.add(
       "StocklessThreats", Option(true, [](const Option& o) {
           Stockless::set_threats_enabled(bool(o));
           return std::nullopt;

@@ -54,7 +54,15 @@ inline ThreatSignal compute_threat_signal(const Position&      pos,
 
     // Full attack maps are useful but not free. Android gets the stricter gate
     // to preserve NPS/battery life. Deep/important nodes still receive it.
-    const int minDepth = settings.mobile ? 7 : 5;
+    // The v0.7 threshold is unchanged for profile 0. Alternative gating
+    // tests whether cheaper quiet nodes or earlier king defense pay off.
+    int minDepth = settings.mobile ? 7 : 5;
+    if (settings.profile == 1)
+        minDepth = settings.mobile ? 8 : 7;
+    else if (settings.profile == 2)
+        minDepth = settings.mobile ? 6 : 4;
+    else if (settings.profile == 3)
+        minDepth = settings.mobile ? 7 : 6;
     if (depth < minDepth && !importantNode)
         return out;
 
