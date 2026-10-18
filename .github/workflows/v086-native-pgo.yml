@@ -1,0 +1,93 @@
+name: Stockless v0.8.6 native vs portable AVX2 PGO speed A/B
+
+on:
+  push:
+    branches: [experimental/v086-native-pgo]
+    paths:
+      - ".github/workflows/v086-native-pgo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stockless-v086-native-pgo
+  cancel-in-progress: false
+
+jobs:
+  exact-source-cpu-architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 160
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Record hardware, compiler and native ISA
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p results/native-pgo
+          grep -m1 'model name' /proc/cpuinfo | tee results/native-pgo/hardware.txt
+          g++ --version | head -1 | tee -a results/native-pgo/hardware.txt
+          git -C upstream/stockfish rev-parse HEAD | tee -a results/native-pgo/hardware.txt
+          (cd upstream/stockfish/src && bash ../scripts/get_native_properties.sh) \
+            | tee -a results/native-pgo/hardware.txt
+
+      - name: Materialize fixed modern SFNNv18 while preserving repo gitlinks
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SHA=effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+          git -C upstream/stockfish fetch --no-tags --depth 1 origin "$SHA"
+          git -C upstream/stockfish checkout --detach "$SHA"
+          STOCKLESS_UPSTREAM_TRACK=modern-v18 python tools/materialize.py
+          grep -Fx "Stockfish: $SHA" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          grep -Fx "Upstream track: modern-v18" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+
+      - name: Build profiled AVX2 portable source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2 COMP=gcc
+          cp build/stockless-src/src/stockless results/native-pgo/stockless-pgo-avx2
+          chmod +x results/native-pgo/stockless-pgo-avx2
+          printf 'uci\nisready\nquit\n' | results/native-pgo/stockless-pgo-avx2 \
+            | tee results/native-pgo/avx2-uci.txt
+          grep -qx 'id name Stockless v0.8.1-dev.20261018.1' results/native-pgo/avx2-uci.txt
+
+      - name: Build profiled native source with identical Stockless overlay
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C build/stockless-src/src -j2 profile-build ARCH=native COMP=gcc
+          cp build/stockless-src/src/stockless results/native-pgo/stockless-pgo-native
+          chmod +x results/native-pgo/stockless-pgo-native
+          printf 'uci\nisready\nquit\n' | results/native-pgo/stockless-pgo-native \
+            | tee results/native-pgo/native-uci.txt
+          grep -qx 'id name Stockless v0.8.1-dev.20261018.1' results/native-pgo/native-uci.txt
+          diff -u results/native-pgo/avx2-uci.txt results/native-pgo/native-uci.txt
+
+      - name: Verify node identity and compare speed under fixed depth
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/compare_bench.py \
+            results/native-pgo/stockless-pgo-avx2 \
+            results/native-pgo/stockless-pgo-native \
+            --depth 12 --rounds 10 | tee results/native-pgo/bench.txt
+          python tests/uci_history_smoke.py results/native-pgo/stockless-pgo-native
+
+      - name: Upload evidence, no unportable engine binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-v086-Native-ISA-Bench
+          path: |
+            results/native-pgo/*.txt
+            build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          if-no-files-found: warn
