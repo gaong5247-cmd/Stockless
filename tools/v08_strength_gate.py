@@ -28,19 +28,18 @@ CANDIDATES = (
 
 
 def engine(name: str, path: Path, profile: dict | None) -> list[str]:
+    hybrid = True if profile is None else profile["hybrid"]
+    aggression = 145 if profile is None else profile["aggression"]
     args = [
         "-engine", f"name={name}", f"cmd={path.resolve()}", f"dir={path.resolve().parent}",
         "option.Threads=1", "option.Hash=32", "option.MoveOverhead=1",
-        "option.StocklessHybrid=true", "option.StocklessAggression=145",
+        f"option.StocklessHybrid={'true' if hybrid else 'false'}",
+        f"option.StocklessAggression={aggression}",
         "option.StocklessThreats=true", "option.StocklessOverdrive=false",
         "option.StocklessMobile=false", "option.StocklessThreatHistory=false",
     ]
     if profile is not None:
-        args.extend((
-            f"option.StocklessHybrid={'true' if profile['hybrid'] else 'false'}",
-            f"option.StocklessAggression={profile['aggression']}",
-            f"option.StocklessSearchProfile={profile['profile']}",
-        ))
+        args.append(f"option.StocklessSearchProfile={profile['profile']}")
     return args
 
 
