@@ -36,6 +36,25 @@ inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
     while (knights)
         attacks |= Attacks::attacks_bb(KNIGHT, pop_lsb(knights));
 
+#if defined(STOCKLESS_MODERN_DUAL_QUEENS)
+    // SFNNv18-era Stockfish exposes a combined bishop/rook attack lookup.
+    // Keep queen rays semantically identical, but fetch both at once.
+    Bitboard bishops = pos.pieces(c, BISHOP);
+    while (bishops)
+        attacks |= Attacks::attacks_bb(BISHOP, pop_lsb(bishops), occupied);
+
+    Bitboard rooks = pos.pieces(c, ROOK);
+    while (rooks)
+        attacks |= Attacks::attacks_bb(ROOK, pop_lsb(rooks), occupied);
+
+    Bitboard queens = pos.pieces(c, QUEEN);
+    while (queens)
+    {
+        const auto [diagonal, orthogonal] =
+          Attacks::both_attacks_bb(pop_lsb(queens), occupied);
+        attacks |= diagonal | orthogonal;
+    }
+#else
     Bitboard diagonals = pos.pieces(c, BISHOP, QUEEN);
     while (diagonals)
         attacks |= Attacks::attacks_bb(BISHOP, pop_lsb(diagonals), occupied);
@@ -43,6 +62,7 @@ inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
     Bitboard orthogonals = pos.pieces(c, ROOK, QUEEN);
     while (orthogonals)
         attacks |= Attacks::attacks_bb(ROOK, pop_lsb(orthogonals), occupied);
+#endif
 
     return attacks;
 }
