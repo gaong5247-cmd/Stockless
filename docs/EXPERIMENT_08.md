@@ -33,10 +33,11 @@ Target: **strictly above 55.00% score against v0.7** (more than 110/200 points o
 
 ## How to run
 
-1. Go to the repository's Actions tab, select **v0.8 search strength gate vs frozen v0.7**.
-2. Use smoke to confirm compilation, UCI, depth-10 legacy node identity and PGN plumbing: 12 games per candidate + 16 independent games (no Elo claim).
-3. Use full for 6 × 200 paired opening games plus 800 holdout, and read the uploaded Stockless-v08-Strength-Gate artifact containing decision.json, report.md, PGNs and logs.
-4. To run UCI manually after materialization/build: setoption name StocklessSearchProfile value 3 with StocklessHybrid=true; use value 0 to restore v0.7 policy.
+1. All source edits on the experimental branch trigger a smoke run: 12 games per candidate + 16 independent games (no Elo claim).
+2. A full run is explicitly triggered **once** by adding or changing arena/V08_SEARCH_RUN to contain the exact word full on this experimental branch; ordinary later commits still trigger only smoke.
+3. Full means 6 × 200 paired opening games plus 800 holdout. Inspect the Stockless-v08-Strength-Gate artifact containing decision.json, report.md, PGNs and logs.
+4. Once the workflow exists on the default branch, workflow_dispatch can also select smoke/full; until then use the branch marker.
+5. To run UCI manually after materialization/build: setoption name StocklessSearchProfile value 3 with StocklessHybrid=true; use value 0 to restore v0.7 policy.
 
 tools/compare_bench.py is also run against frozen v0.7 with profile 0 and must preserve exact depth-limited node counts. Experimental mode speed/strength tradeoffs are tracked separately from CPU-native/PGO builds. Never label a speed result an Elo result.
 
