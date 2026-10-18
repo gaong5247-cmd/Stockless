@@ -73,7 +73,8 @@ def materialize(out: Path) -> None:
     # The modern Stockfish revision supplies Attacks::both_attacks_bb().
     # Inject the macro only into generated build sources. The legacy pinned
     # Stockfish source retains its exact original attack map implementation.
-    if UPSTREAM_TRACK == "modern-v18":
+    if (UPSTREAM_TRACK == "modern-v18"
+            and os.environ.get("STOCKLESS_EXPERIMENTAL_DUAL_QUEENS", "0") == "1"):
         config = target_overlay / "config.h"
         text = config.read_text(encoding="utf-8")
         config.write_text(
