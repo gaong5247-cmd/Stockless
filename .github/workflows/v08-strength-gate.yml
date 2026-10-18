@@ -1,0 +1,157 @@
+name: v0.8 search strength gate vs frozen v0.7
+
+on:
+  push:
+    branches: [experimental/v08-adaptive-search-55pct]
+    paths:
+      - "src/stockless/**"
+      - "tools/materialize.py"
+      - "tools/v08_strength_gate.py"
+      - "tests/search_policy_test.cpp"
+      - "tests/uci_history_smoke.py"
+      - ".github/workflows/v08-strength-gate.yml"
+  pull_request:
+    paths:
+      - "src/stockless/**"
+      - "tools/materialize.py"
+      - "tools/v08_strength_gate.py"
+      - "tests/search_policy_test.cpp"
+      - "tests/uci_history_smoke.py"
+      - ".github/workflows/v08-strength-gate.yml"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "smoke=72 exploratory games; full=1200 screen + 800 holdout games"
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v08-strength-gate
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Select smoke/full workload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+          profile = event.get("inputs", {}).get("profile", "smoke")
+          if profile not in ("smoke", "full"):
+              raise SystemExit(f"Unsupported profile: {profile}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"PROFILE={profile}\n")
+          print(f"Running {profile} candidate evaluation")
+          PY
+
+      - name: Materialize source and verify policy invariants
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/materialize.py
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src \
+            tests/search_policy_test.cpp -o /tmp/stockless-policy-test
+          /tmp/stockless-policy-test
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src \
+            tests/threat_history_test.cpp -o /tmp/stockless-history-test
+          /tmp/stockless-history-test
+          python -m py_compile tools/v08_strength_gate.py
+
+      - name: Build the experimental candidate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          python tests/uci_history_smoke.py build/stockless-src/src/stockless
+
+      - name: Independently build frozen Stockless v0.7
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git worktree add --detach "$RUNNER_TEMP/stockless-v07" 261d46be460cb8c83b2d883e8366bcc9d3f09b27
+          git -C "$RUNNER_TEMP/stockless-v07" submodule update --init --recursive
+          (
+            cd "$RUNNER_TEMP/stockless-v07"
+            python tools/materialize.py
+            make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          )
+          BASELINE="$RUNNER_TEMP/stockless-v07/build/stockless-src/src/stockless"
+          test -x "$BASELINE"
+          echo "BASELINE=$BASELINE" >> "$GITHUB_ENV"
+
+      - name: Assert legacy mode 0 preserves frozen search
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/compare_bench.py \
+            "$BASELINE" build/stockless-src/src/stockless \
+            --depth 10 --rounds 3 | tee v08-legacy-node-check.txt
+
+      - name: Install fixed Cute Chess and legal official openings
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check python-chess
+          mkdir -p results/books
+          curl -fL --retry 4 --retry-delay 3 \
+            -o results/books/official.epd.zip \
+            'https://raw.githubusercontent.com/official-stockfish/books/master/6mvs_%2B90_%2B99.epd.zip'
+          python tools/split_history_book.py \
+            --source results/books/official.epd.zip \
+            --profile "$PROFILE" \
+            --output results/openings --seed 20261018
+          curl -fL --retry 4 --retry-delay 3 \
+            -o cutechess.AppImage \
+            'https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage'
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+
+      - name: Run six experimental candidates and independent holdout
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/v08_strength_gate.py \
+            --profile "$PROFILE" \
+            --candidate build/stockless-src/src/stockless \
+            --baseline "$BASELINE" \
+            --cutechess "$CUTECHESS" \
+            --book-manifest results/openings/manifest.json \
+            --output results/v08-strength --concurrency 2
+
+      - name: Publish reproducible local evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-v08-Strength-Gate
+          path: |
+            v08-legacy-node-check.txt
+            results/openings/manifest.json
+            results/v08-strength/
+          if-no-files-found: warn
