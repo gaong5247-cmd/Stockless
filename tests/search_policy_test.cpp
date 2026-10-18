@@ -83,9 +83,10 @@ int main() {
     set_overdrive_enabled(true);
     set_mobile_profile(true);
     set_hybrid_aggression(145);
+    set_search_profile(0);
     const SearchSettings stored = search_settings();
     assert(stored.hybrid && !stored.threats && stored.overdrive
-           && stored.mobile && stored.aggression == 145);
+           && stored.mobile && stored.aggression == 145 && stored.profile == 0);
 
     // Deterministically cover both optional modes, mobile mode, depth,
     // checks/captures, tactical signal values and alpha-beta windows.
@@ -111,6 +112,26 @@ int main() {
         assert(actual.lmrAdjustment <= 0);
         assert(actual.pruningDepthBoost >= 0 && actual.pruningDepthBoost <= 2);
         assert(actual.reSearchDepthBonus >= 0 && actual.reSearchDepthBonus <= 1);
+
+        // Candidate profiles are bounded and must not mutate frozen v0.7.
+        for (int profile = 1; profile <= 3; ++profile) {
+            SearchSettings candidate = settings;
+            candidate.profile = profile;
+            const SearchPolicy trial = make_search_policy(in, candidate);
+            assert(trial.lmrAdjustment <= 0);
+            assert(trial.lmrAdjustment >= -(candidate.mobile ? 320 : 640)
+                   - (candidate.overdrive ? 192 : 0));
+            assert(trial.pruningDepthBoost == actual.pruningDepthBoost);
+            assert(trial.reSearchDepthBonus == actual.reSearchDepthBonus);
+            candidate.profile = 0;
+            same(make_search_policy(in, candidate), actual);
+        }
     }
-    std::cout << "Search policy snapshots: 100000 reference checks passed\n";
+    for (int mode = -2; mode <= 5; ++mode) {
+        set_search_profile(mode);
+        assert(search_profile() == std::clamp(mode, 0, 3));
+    }
+    set_search_profile(0);
+    assert(search_settings().profile == 0);
+    std::cout << "Search policy: 100000 legacy checks and 300000 candidate bounds passed\n";
 }
