@@ -95,15 +95,15 @@ int main() {
         return seed;
     };
     for (int i = 0; i < 100000; ++i) {
-        SearchSettings settings{bool(next() & 1), bool(next() & 1),
-                                bool(next() & 1), bool(next() & 1),
+        SearchSettings settings{bool((next() >> 17) & 1), bool((next() >> 17) & 1),
+                                bool((next() >> 17) & 1), bool((next() >> 17) & 1),
                                 int(next() % 201)};
         SearchInputs in{
             int(next() % 42) + 1, int(next() % 64) + 1,
             int(next() % 300), int(next() % 257), int(next() % 8),
-            bool(next() & 1), bool(next() & 1), bool(next() & 1),
-            bool(next() & 1), bool(next() & 1), bool(next() & 1),
-            bool(next() & 1),
+            bool((next() >> 17) & 1), bool((next() >> 17) & 1), bool((next() >> 17) & 1),
+            bool((next() >> 17) & 1), bool((next() >> 17) & 1), bool((next() >> 17) & 1),
+            bool((next() >> 17) & 1),
             {int(next() % 257), int(next() % 257), int(next() % 257)}
         };
         const auto actual = make_search_policy(in, settings);
