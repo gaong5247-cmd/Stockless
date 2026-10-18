@@ -25,7 +25,11 @@ struct ThreatSignal {
 // matching Position::attacks_by<QUEEN>() without an extra queen dispatch.
 // Knights are occupancy independent. No king attacks were present in v0.7.
 inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
-    Bitboard attacks = pos.attacks_by<PAWN>(c);
+    // Explicit pawn bitboard attacks work with both the pinned September
+    // Stockfish API and the newer SFNNv18 upstream (which removed attacks_by()).
+    const Bitboard pawns = pos.pieces(c, PAWN);
+    Bitboard attacks = c == WHITE ? pawn_attacks_bb<WHITE>(pawns)
+                                  : pawn_attacks_bb<BLACK>(pawns);
     const Bitboard occupied = pos.pieces();
 
     Bitboard knights = pos.pieces(c, KNIGHT);
@@ -54,7 +58,15 @@ inline ThreatSignal compute_threat_signal(const Position&      pos,
 
     // Full attack maps are useful but not free. Android gets the stricter gate
     // to preserve NPS/battery life. Deep/important nodes still receive it.
-    const int minDepth = settings.mobile ? 7 : 5;
+    // The v0.7 threshold is unchanged for profile 0. Alternative gating
+    // tests whether cheaper quiet nodes or earlier king defense pay off.
+    int minDepth = settings.mobile ? 7 : 5;
+    if (settings.profile == 1)
+        minDepth = settings.mobile ? 8 : 7;
+    else if (settings.profile == 2)
+        minDepth = settings.mobile ? 6 : 4;
+    else if (settings.profile == 3)
+        minDepth = settings.mobile ? 7 : 6;
     if (depth < minDepth && !importantNode)
         return out;
 

@@ -5,7 +5,7 @@
 
 namespace Stockfish::Stockless {
 
-inline constexpr const char* Version = "v0.7.2-dev.20261018.2";
+inline constexpr const char* Version = "v0.8.1-dev.20261018.1";
 
 #if defined(__ANDROID__)
 inline constexpr bool DefaultMobileProfile = true;
@@ -25,11 +25,15 @@ inline constexpr int  DefaultThreatHistoryWeight = 100;
 // storage tied to one constant so GUI/UCI startup cannot silently diverge.
 inline constexpr int DefaultHybridAggression = 145;
 
+// Zero keeps the byte-for-byte v0.7 search policy; 1-3 are unproven A/B candidates.
+inline constexpr int DefaultSearchProfile = 0;
+
 inline std::atomic_bool HybridEnabled{true};
 inline std::atomic_bool ThreatsEnabled{true};
 inline std::atomic_bool OverdriveEnabled{DefaultOverdrive};
 inline std::atomic_bool MobileProfile{DefaultMobileProfile};
 inline std::atomic_int  HybridAggression{DefaultHybridAggression};
+inline std::atomic_int  SearchProfile{DefaultSearchProfile};
 inline std::atomic_bool ThreatHistoryEnabled{DefaultThreatHistory};
 inline std::atomic_int  ThreatHistoryWeight{DefaultThreatHistoryWeight};
 
@@ -97,6 +101,16 @@ inline constexpr int default_threat_history_weight() noexcept {
     return DefaultThreatHistoryWeight;
 }
 
+inline void set_search_profile(int value) noexcept {
+    SearchProfile.store(std::clamp(value, 0, 3), std::memory_order_relaxed);
+}
+inline int search_profile() noexcept {
+    return SearchProfile.load(std::memory_order_relaxed);
+}
+inline constexpr int default_search_profile() noexcept {
+    return DefaultSearchProfile;
+}
+
 // UCI option state is stable for a search. Snapshot its atomics once per
 // node, rather than reloading them for every legal move. Never mutate this
 // snapshot during search; UCI setoption must be applied between searches.
@@ -106,15 +120,16 @@ struct SearchSettings {
     bool overdrive;
     bool mobile;
     int aggression;
+    int profile = 0;
 };
 
 inline SearchSettings search_settings() noexcept {
     const bool hybrid = hybrid_enabled();
     if (!hybrid)
-        return {false, false, false, false, 0};
+        return {false, false, false, false, 0, 0};
 
     return {true, threats_enabled(), overdrive_enabled(), mobile_profile(),
-            hybrid_aggression()};
+            hybrid_aggression(), search_profile()};
 }
 
 } // namespace Stockfish::Stockless
