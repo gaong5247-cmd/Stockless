@@ -132,6 +132,13 @@ docs/                           Architecture, upstream, tuning, Android
 assets/stockless-logo.svg       Project branding
 ```
 
+## Contributors
+
+- Project maintainer: [@gaong5247-cmd](https://github.com/gaong5247-cmd)
+- Contributor: [@eueong04-create](https://github.com/eueong04-create)
+
+See the maintained [CONTRIBUTORS.md](CONTRIBUTORS.md) for project acknowledgements.
+
 ## Licensing and attribution
 
 See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.md). Stockfish is GPL-3.0-or-later; Reckless is AGPL-3.0; Stockless integration is distributed under AGPL-3.0. Preserve upstream notices and comply with applicable source-distribution obligations.
@@ -229,6 +236,13 @@ scripts/                       빌드 및 대국 스크립트
 docs/                           설계, 테스트, Android 문서
 assets/stockless-logo.svg       로고
 ```
+
+## 기여자
+
+- 프로젝트 관리자: [@gaong5247-cmd](https://github.com/gaong5247-cmd)
+- 기여자: [@eueong04-create](https://github.com/eueong04-create)
+
+전체 명단은 [CONTRIBUTORS.md](CONTRIBUTORS.md)를 참고하세요.
 
 ## 라이선스
 
