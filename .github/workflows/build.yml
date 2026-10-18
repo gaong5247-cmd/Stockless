@@ -35,7 +35,7 @@ jobs:
           BIN=build/stockless-src/src/stockless
           test -x "$BIN"
           printf 'uci\nsetoption name StocklessHybrid value true\nsetoption name StocklessAggression value 125\nsetoption name StocklessThreats value true\nsetoption name StocklessOverdrive value true\nsetoption name StocklessMobile value false\nisready\nquit\n' | "$BIN" | tee uci.txt
-          grep -qx 'id name Stockless v0.7' uci.txt
+          grep -qx 'id name Stockless v0.7.1' uci.txt
           grep -q 'option name StocklessHybrid type check default true' uci.txt
           grep -q 'option name StocklessAggression type spin default 145' uci.txt
           grep -q 'option name StocklessThreats type check default true' uci.txt
@@ -56,7 +56,7 @@ jobs:
           cp docs/GUI_BRANDING.md dist/linux/
       - uses: actions/upload-artifact@v4
         with:
-          name: Stockless-v0.7-Linux-x86_64-avx2
+          name: Stockless-v0.7.1-Linux-x86_64-avx2
           path: dist/linux
           if-no-files-found: error
 
@@ -90,7 +90,7 @@ jobs:
           }
           $uciText = @("uci", "isready", "quit") | & "build/stockless-src/src/stockless.exe"
           if ($LASTEXITCODE -ne 0) { throw "UCI handshake exited with code $LASTEXITCODE" }
-          if ($uciText -notcontains "id name Stockless v0.7") { throw "Incorrect UCI identity: $uciText" }
+          if ($uciText -notcontains "id name Stockless v0.7.1") { throw "Incorrect UCI identity: $uciText" }
           if ($uciText -notcontains "uciok" -or $uciText -notcontains "readyok") { throw "UCI startup failed" }
           if (-not ($uciText -match "option name StocklessThreatHistory type check default false")) { throw "Incorrect history default" }
       - name: Package Windows artifact
@@ -102,7 +102,7 @@ jobs:
           Copy-Item "docs/GUI_BRANDING.md" "dist/windows/"
       - uses: actions/upload-artifact@v4
         with:
-          name: Stockless-v0.7-Windows-x86_64-avx2
+          name: Stockless-v0.7.1-Windows-x86_64-avx2
           path: dist/windows
           if-no-files-found: error
 
@@ -148,10 +148,10 @@ jobs:
           make -C build/stockless-src/src -j2 build \
             ARCH=${{ matrix.arch }} COMP=ndk COMPCXX=${{ matrix.compiler }}
           mkdir -p dist
-          cp build/stockless-src/src/stockless "dist/stockless-v0.7-${{ matrix.abi }}"
-          chmod +x "dist/stockless-v0.7-${{ matrix.abi }}"
-          file "dist/stockless-v0.7-${{ matrix.abi }}"
-          llvm-readelf -h "dist/stockless-v0.7-${{ matrix.abi }}" | tee "dist/elf-${{ matrix.abi }}.txt"
+          cp build/stockless-src/src/stockless "dist/stockless-v0.7.1-${{ matrix.abi }}"
+          chmod +x "dist/stockless-v0.7.1-${{ matrix.abi }}"
+          file "dist/stockless-v0.7.1-${{ matrix.abi }}"
+          llvm-readelf -h "dist/stockless-v0.7.1-${{ matrix.abi }}" | tee "dist/elf-${{ matrix.abi }}.txt"
       - name: Verify ABI
         shell: bash
         run: |
@@ -162,9 +162,9 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Stockless-v0.7-DroidFish-${{ matrix.abi }}
+          name: Stockless-v0.7.1-DroidFish-${{ matrix.abi }}
           path: |
-            dist/stockless-v0.7-${{ matrix.abi }}
+            dist/stockless-v0.7.1-${{ matrix.abi }}
             dist/elf-${{ matrix.abi }}.txt
             assets/stockless-logo.svg
             engine-branding.json

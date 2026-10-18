@@ -1,13 +1,13 @@
 # DroidFish / Android
 
-Stockless v0.7 is built as a normal Android UCI executable, so DroidFish can run it directly.
+Stockless v0.7.1 is built as a normal Android UCI executable, so DroidFish can run it directly.
 
 ## Supported artifacts
 
 GitHub Actions builds two binaries:
 
-- `stockless-v0.7-arm64-v8a` — recommended for almost every modern 64-bit Android phone/tablet.
-- `stockless-v0.7-armeabi-v7a` — fallback for old 32-bit ARM devices.
+- `stockless-v0.7.1-arm64-v8a` — recommended for almost every modern 64-bit Android phone/tablet.
+- `stockless-v0.7.1-armeabi-v7a` — fallback for old 32-bit ARM devices.
 
 Both are compiled with Android API 26-compatible NDK toolchains (Android 8+ target).
 

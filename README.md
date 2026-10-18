@@ -8,7 +8,9 @@
 
 **Repository:** https://github.com/gaong5247-cmd/Stockless
 
-**Implementation version: v0.7.** Its UCI handshake reports `id name Stockless v0.7` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
+**Implementation version: v0.7.1.** Its UCI handshake reports `id name Stockless v0.7.1` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
+
+**Universal release v0.7.1:** [platform downloads and CPU automatic selection](docs/UNIVERSAL_RELEASE.md). Universal x86-64 and Android ARM64 binaries keep the v0.7 optimization changes; no Elo gain over v0.7 is claimed.
 
 **Optimization candidate (not yet strength-verified):** [per-node policy snapshots, CPU-native PGO builds and rigorous bench gating](docs/OPTIMIZATION_20261018.md). Search fast-path changes are in the source; no Elo gain is claimed.
 
@@ -138,9 +140,11 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 
 > Stockless는 Stockfish의 안정적인 C++ 엔진 기반 위에 Reckless의 연구 아이디어를 참고한 **독립적인 전술 인식형 탐색 정책**을 추가한 하이브리드 체스 엔진입니다. 두 엔진의 코드를 단순히 반반 합치거나 NNUE 가중치를 평균 낸 구조가 아닙니다.
 
-**현재 소스 버전: v0.7.** UCI에서 날짜 접미사 없이 `id name Stockless v0.7`로 응답합니다. History ON은 성능 향상이 입증되지 않아 **기본 OFF**입니다.
+**현재 소스 버전: v0.7.1.** UCI에서 날짜 접미사 없이 `id name Stockless v0.7.1`로 응답합니다. History ON은 성능 향상이 입증되지 않아 **기본 OFF**입니다.
 
 **최적화 후보(실전 성능 미검증):** [탐색 노드당 설정 스냅샷, CPU별 PGO 빌드, 벤치마크 기준](docs/OPTIMIZATION_20261018.md). Elo 상승을 검증한 단계는 아닙니다.
+
+**Universal 배포 v0.7.1:** [Windows·Linux·Android 바이너리와 CPU 자동 감지 안내](docs/UNIVERSAL_RELEASE.md). v0.7 탐색 최적화를 유지하며 새 Elo 향상을 주장하지 않습니다.
 
 **실험 연구:** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](docs/EXPERIMENT_07.md). 기본값은 OFF이며 Elo 상승이 검증된 것은 아닙니다.
 

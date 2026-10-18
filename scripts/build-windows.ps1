@@ -26,7 +26,7 @@ if ($LASTEXITCODE -ne 0) { throw "Stockless make $Target failed with $LASTEXITCO
 Write-Host ""
 Write-Host "Build complete."
 Write-Host "Binary is under: $EngineSrc"
-Write-Host "UCI identity: Stockless v0.7"
+Write-Host "UCI identity: Stockless v0.7.1"
 Write-Host "Hybrid search is ON by default; Overdrive and ThreatHistory are OFF."
 Write-Host "Enable in UCI with: setoption name StocklessHybrid value true"
 Write-Host "Aggression default: 145 (range 0..200)"
