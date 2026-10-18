@@ -1,0 +1,103 @@
+name: Stockless v0.8.4 GCC vs Clang PGO performance experiment
+
+on:
+  push:
+    branches: [experimental/v084-compiler-pgo-shootout]
+    paths:
+      - ".github/workflows/v084-compiler-pgo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stockless-v084-compiler-pgo
+  cancel-in-progress: false
+
+jobs:
+  toolchain-comparison:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install matching LLVM 18 profiler and record compilers
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y llvm-18
+          command -v llvm-profdata-18
+          g++ --version | head -1 | tee compiler-info.txt
+          clang++ --version | head -1 | tee -a compiler-info.txt
+          llvm-profdata-18 --version | head -1 | tee -a compiler-info.txt
+          uname -a | tee -a compiler-info.txt
+          grep -m1 -E '^model name|^Features' /proc/cpuinfo | tee -a compiler-info.txt || true
+
+      - name: Materialize one pinned modern SFNNv18 source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SHA=effdc3fd3f6de6e75fe1374a51a7a7eed66f880b
+          git -C upstream/stockfish fetch --no-tags --depth 1 origin "$SHA"
+          git -C upstream/stockfish checkout --detach "$SHA"
+          STOCKLESS_UPSTREAM_TRACK=modern-v18 python tools/materialize.py
+          grep -Fx "Upstream track: modern-v18" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          grep -Fx "Stockfish: $SHA" build/stockless-src/STOCKLESS_MATERIALIZED.txt
+
+      - name: GCC profile-guided build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2 COMP=gcc
+          mkdir -p results/compiler
+          cp build/stockless-src/src/stockless results/compiler/stockless-gcc-pgo
+          chmod +x results/compiler/stockless-gcc-pgo
+
+      - name: Clang profile-guided build from the SAME source and ISA
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2 COMP=clang LLVM_PROFDATA=llvm-profdata-18
+          cp build/stockless-src/src/stockless results/compiler/stockless-clang-pgo
+          chmod +x results/compiler/stockless-clang-pgo
+
+      - name: Check UCI identity and actual search for both compilers
+        shell: bash
+        run: |
+          set -euxo pipefail
+          for compiler in gcc clang; do
+            printf 'uci\nisready\nquit\n' | "results/compiler/stockless-$compiler-pgo" > "results/compiler/$compiler-uci.txt"
+            grep -qx 'id name Stockless v0.8.1-dev.20261018.1' "results/compiler/$compiler-uci.txt"
+            grep -qx 'uciok' "results/compiler/$compiler-uci.txt"
+            grep -qx 'readyok' "results/compiler/$compiler-uci.txt"
+          done
+          diff -u results/compiler/gcc-uci.txt results/compiler/clang-uci.txt
+          python tests/uci_history_smoke.py results/compiler/stockless-clang-pgo
+
+      - name: Require same searched nodes and measure interleaved median NPS
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python tools/compare_bench.py \
+            results/compiler/stockless-gcc-pgo \
+            results/compiler/stockless-clang-pgo \
+            --depth 12 --rounds 10 | tee results/compiler/benchmark.txt
+
+      - name: Preserve only logs, not CPU-specific executables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stockless-v084-Compiler-PGO-Results
+          path: |
+            compiler-info.txt
+            results/compiler/*.txt
+            build/stockless-src/STOCKLESS_MATERIALIZED.txt
+          if-no-files-found: warn
