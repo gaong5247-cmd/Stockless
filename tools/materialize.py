@@ -155,8 +155,11 @@ def materialize(out: Path) -> None:
 """
     node_patch = """    // No atomic UCI option reloads in the hot per-move policy loop.
     const auto stocklessSettings = Stockless::search_settings();
-    Stockless::ThreatSignal stocklessThreat{};
-    bool stocklessThreatReady = false;
+    // Preserve the exact pre-move attack-map snapshot. Delaying this
+    // read to after earlier searches changed depth-limited node counts.
+    const auto stocklessThreat =
+      Stockless::compute_threat_signal(pos, int(depth), ss->ttPv || PvNode || depth >= 8,
+                                       stocklessSettings);
     const int stocklessCorrectionSignal =
       std::min(256, int(std::abs(correctionValue) / 131072));
 
@@ -170,22 +173,15 @@ def materialize(out: Path) -> None:
     # The original v0.7 policy was computed for EVERY legal move before Step 15,
     # including moves discarded by Stockfish's native futility/SEE pruning.
     # Only opt-in desktop Overdrive can change Step 15's pruning depth.
-    # For the default policy, delay both expensive attack-map construction
-    # and the arithmetic until after that pruning, and skip depth-1/first moves
+    # For the default policy, preserve the original attack-map snapshot,
+    # but delay policy arithmetic until after pruning, and skip depth-1/first moves
     # which cannot use LMR or the opt-in re-search bonus.
     policy_factory_anchor = """    int moveCount = 0;
 """
     policy_factory_patch = policy_factory_anchor + """
-    // Lazy per-node attack maps: all calculations still inspect the same
-    // pre-move position, and the policy is cached only at this node.
+    // Build the policy only when needed, against the original node's
+    // precomputed threat signal, with no change to feature timing.
     const auto stocklessPolicyForMove = [&]() noexcept {
-        if (!stocklessThreatReady)
-        {
-            stocklessThreat = Stockless::compute_threat_signal(
-              pos, int(depth), ss->ttPv || PvNode || depth >= 8, stocklessSettings);
-            stocklessThreatReady = true;
-        }
-
         return Stockless::make_search_policy({
           int(depth),
           moveCount,
