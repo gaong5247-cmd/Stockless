@@ -15,7 +15,7 @@ def inspect_args(overrides: dict[str, str]) -> list[str]:
     with tempfile.TemporaryDirectory() as directory:
         tmp = Path(directory)
         fake_cute = tmp / "cutechess-cli"
-        fake_cute.write_text('#!/bin/sh\\nprintf "%s\\n" "$@" > "$DUMP_ARGS"\\n', encoding="utf-8")
+        fake_cute.write_text('#!/bin/sh\nprintf "%s\n" "$@" > "$DUMP_ARGS"\n', encoding="utf-8")
         fake_cute.chmod(0o755)
 
         env = os.environ.copy()
