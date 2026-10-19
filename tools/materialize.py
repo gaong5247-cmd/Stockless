@@ -155,11 +155,11 @@ def materialize(out: Path) -> None:
 """
     node_patch = """    // No atomic UCI option reloads in the hot per-move policy loop.
     const auto stocklessSettings = Stockless::search_settings();
-    // Preserve the exact pre-move attack-map snapshot. Delaying this
-    // read to after earlier searches changed depth-limited node counts.
-    const auto stocklessThreat =
-      Stockless::compute_threat_signal(pos, int(depth), ss->ttPv || PvNode || depth >= 8,
-                                       stocklessSettings);
+    // Only build costly threat attack maps for nodes whose moves survive
+    // native pruning and actually require a Stockless policy decision.
+    // Keep the original per-move policy calls (including shallow/first).
+    Stockless::ThreatSignal stocklessThreat{};
+    bool stocklessThreatReady = false;
     const int stocklessCorrectionSignal =
       std::min(256, int(std::abs(correctionValue) / 131072));
 
@@ -173,15 +173,22 @@ def materialize(out: Path) -> None:
     # The original v0.7 policy was computed for EVERY legal move before Step 15,
     # including moves discarded by Stockfish's native futility/SEE pruning.
     # Only opt-in desktop Overdrive can change Step 15's pruning depth.
-    # For the default policy, preserve the original attack-map snapshot,
-    # but delay policy arithmetic until after pruning without bypassing the
-    # first/shallow-move policy while validating decision equivalence.
+    # The default policy no longer computes attack maps at nodes without
+    # any eligible surviving moves; keep the first/shallow-move policy calls
+    # intact to preserve all search decisions.
     policy_factory_anchor = """    int moveCount = 0;
 """
     policy_factory_patch = policy_factory_anchor + """
-    // Build the policy only when needed, against the original node's
-    // precomputed threat signal, with no change to feature timing.
+    // Build full attack maps once, lazily, at the first eligible move.
+    // Later moves reuse the same board-derived signal at this position.
     const auto stocklessPolicyForMove = [&]() noexcept {
+        if (!stocklessThreatReady)
+        {
+            stocklessThreat = Stockless::compute_threat_signal(
+              pos, int(depth), ss->ttPv || PvNode || depth >= 8, stocklessSettings);
+            stocklessThreatReady = true;
+        }
+
         return Stockless::make_search_policy({
           int(depth),
           moveCount,
