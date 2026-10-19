@@ -220,7 +220,7 @@ def materialize(out: Path) -> None:
 """
     replace_once(search_cpp, policy_anchor, policy_patch)
 
-    late_policy_anchor = "        // Step 16. Singular Extensions\\n"
+    late_policy_anchor = "        // Step 16. Singular Extensions\n"
     late_policy_patch = """
         // All other Stockless policy effects start at LMR (depth >= 2,
         // moveCount > 1). Avoid spending CPU on discarded or first moves.
