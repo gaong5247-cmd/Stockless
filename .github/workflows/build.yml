@@ -17,6 +17,8 @@ jobs:
           python-version: "3.12"
       - name: Materialize Stockless
         run: python tools/materialize.py
+      - name: Verify arena defaults and overrides
+        run: python tests/test_cutechess_defaults.py
       - name: Verify threat-history invariants
         shell: bash
         run: |
