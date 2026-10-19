@@ -1,6 +1,6 @@
 # Stockless v0.8.9 — Universal UCI release
 
-**October 20, 2026 | UCI name: \`Stockless v0.8.9\` | Latest stable release**
+**October 20, 2026 | UCI name: `Stockless v0.8.9` | Latest stable release**
 
 Stockless combines the pinned Stockfish search and NNUE framework with Stockless's threat-aware hybrid search policy. This release integrates the conservative, node-equivalent search-policy refactor and corrects the test arena's accidental default-option overrides. It is **not** a new Stockfish 19 binary or a claim of proven superiority over Stockfish 19.
 
@@ -8,12 +8,12 @@ Stockless combines the pinned Stockfish search and NNUE framework with Stockless
 
 | Release file | Operating system | CPU support |
 | --- | --- | --- |
-| \`Stockless-v0.8.9-windows-x86_64-universal.zip\` | Windows 64-bit | x86-64 with automatic supported ISA dispatch |
-| \`Stockless-v0.8.9-linux-x86_64-universal.zip\` | Linux x86-64 | x86-64 with automatic supported ISA dispatch |
-| \`Stockless-v0.8.9-linux-arm64-universal.zip\` | Linux ARM64 | ARMv8 / DotProd automatic dispatch |
-| \`Stockless-v0.8.9-android-arm64-universal.zip\` | Android 8+, 64-bit ARM | ARMv8 / DotProd automatic dispatch |
-| \`Stockless-v0.8.9-android-armeabi-v7a.zip\` | Android 8+, 32-bit ARM | ARMv7 NEON |
-| \`SHA256SUMS.txt\` | All platforms | ZIP file integrity checksums |
+| `Stockless-v0.8.9-windows-x86_64-universal.zip` | Windows 64-bit | x86-64 with automatic supported ISA dispatch |
+| `Stockless-v0.8.9-linux-x86_64-universal.zip` | Linux x86-64 | x86-64 with automatic supported ISA dispatch |
+| `Stockless-v0.8.9-linux-arm64-universal.zip` | Linux ARM64 | ARMv8 / DotProd automatic dispatch |
+| `Stockless-v0.8.9-android-arm64-universal.zip` | Android 8+, 64-bit ARM | ARMv8 / DotProd automatic dispatch |
+| `Stockless-v0.8.9-android-armeabi-v7a.zip` | Android 8+, 32-bit ARM | ARMv7 NEON |
+| `SHA256SUMS.txt` | All platforms | ZIP file integrity checksums |
 
 **These are native UCI executables, not APKs.** Windows, Linux and Android do not share one executable. Extract the ZIP and register/import the bundled binary through a chess GUI compatible with native UCI engines. Windows users should select the included EXE. Android users must choose a GUI capable of importing external native engines such as DroidFish.
 
@@ -21,7 +21,7 @@ Each ZIP contains license and third-party notices, a README, branding, the exact
 
 ## What's changed
 
-1. **UCI identity and package consistency:** the engine handshake, branding manifest, package names, metadata and release tag all use \`v0.8.9\`.
+1. **UCI identity and package consistency:** the engine handshake, branding manifest, package names, metadata and release tag all use `v0.8.9`.
 2. **Search-policy fast path:** retain the existing per-node threat signal but move default Stockless policy arithmetic until *after* Stockfish's native shallow pruning, avoiding some calculations for moves the search already discards. Existing LMR decisions remain unchanged on the tested depth-12 bench positions, which searched **1,078,618 nodes** in both the reference and candidate.
 3. **Overdrive compatibility:** keep the earlier policy timing with optional desktop Overdrive, which may affect pruning decisions.
 4. **Correct match defaults:** fix a duplicated test-script assignment that inadvertently launched Stockless with Aggression 112 and Overdrive ON. Correct defaults are Aggression **145** / Overdrive **OFF**.
@@ -29,7 +29,7 @@ Each ZIP contains license and third-party notices, a README, branding, the exact
 
 ## Testing and strength caveat
 
-Under x86-64 AVX2, 1 search thread, Hash 32 MiB, 0.5+0.005 time control and the official Stockfish \`8moves_v3\` color-swapped opening suite:
+Under x86-64 AVX2, 1 search thread, Hash 32 MiB, 0.5+0.005 time control and the official Stockfish `8moves_v3` color-swapped opening suite:
 
 | Opponent | Games | W/D/L | Candidate score | Relative Elo, 95% interval |
 | --- | ---: | --- | ---: | --- |
@@ -44,22 +44,22 @@ Research: [PR #21](https://github.com/gaong5247-cmd/Stockless/pull/21) and [docu
 
 ## UCI defaults
 
-\`\`\`text
+```text
 id name Stockless v0.8.9
 option name StocklessHybrid type check default true
 option name StocklessAggression type spin default 145 min 0 max 200
 option name StocklessThreats type check default true
 option name StocklessOverdrive type check default false
 option name StocklessThreatHistory type check default false
-\`\`\`
+```
 
-The output contains additional normal Stockfish UCI options. \`StocklessMobile\` defaults to true on Android and false elsewhere.
+The output contains additional normal Stockfish UCI options. `StocklessMobile` defaults to true on Android and false elsewhere.
 
 ## 한국어 안내
 
 **Stockless v0.8.9**는 탐색 구조를 보수적으로 정리하고, 잘못된 대국 스크립트 기본 설정을 바로잡은 새로운 UCI 엔진 릴리스입니다. Windows / Linux / Android용으로 각각 빌드합니다.
 
-- **UCI 이름:** \`Stockless v0.8.9\`
+- **UCI 이름:** `Stockless v0.8.9`
 - **기본값:** Hybrid ON, Aggression 145, Threats ON, Overdrive OFF, ThreatHistory OFF
 - **안드로이드:** APK가 아니라 외부 UCI 실행 파일이며, 이를 지원하는 체스 GUI가 필요함
 - **공식 Stockfish 19 대국:** 256판 49.219% (추가 반복은 46.484%). 아직 통계적으로 Stockfish를 이긴 것으로 볼 수 없음
