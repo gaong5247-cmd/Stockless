@@ -10,11 +10,11 @@
 
 **Live engine testing / Arena:** [OpenFishtest Arena](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — view match results and standings (maintained as a separate testing project).
 
-**Stable tested baseline:** v0.7.1. **Published versioned research releases:** [v0.8 through v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases) (normal GitHub Releases; not claims of verified strength gains). **New pre-release:** [Stockless v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1), based on official Stockfish SFNNv18/K32Q2 NNUE with an unproven, opt-in attack-map research path. Each release is tied to a distinct historical source snapshot; it does not overwrite the pinned main branch. Windows/Linux/Android assets are attached as builds pass validation.
+**Latest stable release:** [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9) (universal UCI builds, conservative search refactor and corrected arena defaults). **Earlier research archives:** [v0.8–v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases); [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1) remains a separate opt-in research pre-release. Release numbering does not establish a verified playing-strength gain.
 
-**Implementation version: v0.7.1 (stable).** Its UCI handshake reports `id name Stockless v0.7.1` without the upstream Stockfish development-date suffix. Threat History remains **OFF** by default because no Elo gain was established.
+**Implementation version: v0.8.9.** The UCI handshake reports `id name Stockless v0.8.9` (no upstream development-date suffix). Threat History and Overdrive remain **OFF** by default; preliminary paired matches do not establish an Elo advantage over Stockfish 19.
 
-**Universal release v0.7.1:** [platform downloads and CPU automatic selection](docs/UNIVERSAL_RELEASE.md). Universal x86-64 and Android ARM64 binaries keep the v0.7 optimization changes; no Elo gain over v0.7 is claimed.
+**Universal release v0.8.9:** [platform downloads, installation, UCI defaults and verification results](docs/RELEASE_v0.8.9.md). The older [v0.7.1 release guide](docs/UNIVERSAL_RELEASE.md) remains archived.
 
 **Optimization candidate (not yet strength-verified):** [per-node policy snapshots, CPU-native PGO builds and rigorous bench gating](docs/OPTIMIZATION_20261018.md). Search fast-path changes are in the source; no Elo gain is claimed.
 
@@ -153,11 +153,11 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 
 **실시간 엔진 대국 / 아레나:** [OpenFishtest Arena 바로가기](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — 엔진 대국 결과와 순위를 확인할 수 있는 별도 테스트 프로젝트입니다.
 
-**현재 안정 검증 기준: v0.7.1.** **새 버전별 Release:** [v0.8~v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases) (각각 기록 보존용 정식 Release 페이지, Elo 향상 확정 아님). **프리릴리스:** [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1). 기존 소스 코드는 유지하며 실행 바이너리는 플랫폼별 빌드 검증에 따라 첨부됩니다.  UCI에서 날짜 접미사 없이 `id name Stockless v0.7.1`로 응답합니다. History ON은 성능 향상이 입증되지 않아 **기본 OFF**입니다.
+**최신 정식 릴리스: [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9).** v0.8~v0.8.7은 연구 기록용 릴리스로 유지하고, [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1)은 별도 프리릴리스입니다. UCI에서는 `id name Stockless v0.8.9`로 응답합니다. 기존 Stockless 대비 성능 개선 가능성은 있지만, 정식 Stockfish 19를 능가한다는 통계적 증거는 아직 없습니다.
 
 **최적화 후보(실전 성능 미검증):** [탐색 노드당 설정 스냅샷, CPU별 PGO 빌드, 벤치마크 기준](docs/OPTIMIZATION_20261018.md). Elo 상승을 검증한 단계는 아닙니다.
 
-**Universal 배포 v0.7.1:** [Windows·Linux·Android 바이너리와 CPU 자동 감지 안내](docs/UNIVERSAL_RELEASE.md). v0.7 탐색 최적화를 유지하며 새 Elo 향상을 주장하지 않습니다.
+**Universal 배포 v0.8.9:** [Windows·Linux·Android 설치, UCI 설정 및 대국 결과](docs/RELEASE_v0.8.9.md). 기본 공격성 145, Overdrive OFF, Threat History OFF를 유지합니다. 이전 [v0.7.1 안내](docs/UNIVERSAL_RELEASE.md)도 보존합니다.
 
 **실험 연구:** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](docs/EXPERIMENT_07.md). 기본값은 OFF이며 Elo 상승이 검증된 것은 아닙니다.
 
