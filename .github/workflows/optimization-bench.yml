@@ -1,7 +1,7 @@
 name: optimization-benchmark
 
-# Deliberately opt-in / run once when this workflow is added to main.
-# A runner speed test is NOT a playing-strength claim.
+# A reproducible same-runner baseline comparison, plus a preliminary
+# Stockfish arena. Same-depth NPS is not a substitute for SPRT/STC/LTC.
 on:
   push:
     branches: [main]
@@ -10,13 +10,17 @@ on:
   pull_request:
     paths:
       - ".github/workflows/optimization-bench.yml"
+      - "tools/materialize.py"
+      - "src/stockless/**"
       - "tests/search_policy_test.cpp"
+      - "tests/test_cutechess_defaults.py"
+      - "scripts/run-cutechess-match.sh"
   workflow_dispatch:
 
 jobs:
   deterministic-linux-bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,54 +31,127 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate optimization tooling
+      - name: Validate optimization scripts and arena options
         run: |
-          python3 -m py_compile tools/compare_bench.py
-          bash -n scripts/build-optimized.sh
+          python3 -m py_compile tools/compare_bench.py tools/materialize.py tests/test_cutechess_defaults.py
+          bash -n scripts/build-optimized.sh scripts/run-cutechess-match.sh
+          python3 tests/test_cutechess_defaults.py
 
-      - name: Build current Stockless (standard AVX2)
+      - name: Build candidate (fixed x86-64-avx2)
         run: |
           python3 tools/materialize.py
           make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          cp build/stockless-src/src/stockless candidate-stockless
 
-      - name: Build frozen pre-optimization v0.7
+      - name: Build frozen PR-base reference (same ISA)
+        shell: bash
         run: |
-          git worktree add --detach ../stockless-v07 bb0479cbab709c3b6403048f3cb5fffe897b910c
-          git -C ../stockless-v07 submodule update --init --recursive
+          set -euxo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA=$(git rev-parse HEAD^1)
+          else
+            BASE_SHA=$(git rev-parse HEAD^)
+          fi
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          git worktree add --detach ../stockless-reference "$BASE_SHA"
+          git -C ../stockless-reference submodule update --init --recursive
           (
-            cd ../stockless-v07
+            cd ../stockless-reference
             python3 tools/materialize.py
             make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
           )
+          cp ../stockless-reference/build/stockless-src/src/stockless reference-stockless
 
-      - name: Compare unmodified v0.7 to fast-path snapshot
+      - name: Interleaved depth-12 bench with exact node-count guard
         shell: bash
         run: |
           set -o pipefail
-          python3 tools/compare_bench.py \
-            ../stockless-v07/build/stockless-src/src/stockless \
-            build/stockless-src/src/stockless \
-            --depth 10 --rounds 4 2>&1 | tee before-after-bench.txt
+          python3 tools/compare_bench.py ./reference-stockless ./candidate-stockless \
+            --depth 12 --rounds 6 2>&1 | tee before-after-bench.txt
 
-      - name: Build CPU-profiled candidate
+      - name: Build CPU-profiled candidate (explicit request only)
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          cp build/stockless-src/src/stockless build/stockless-src/src/stockless-unprofiled
           make -C build/stockless-src/src -j2 profile-build ARCH=x86-64-avx2
 
-      - name: Compare unprofiled to PGO (identical source and ISA)
+      - name: PGO vs standard bench (explicit request only)
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -o pipefail
-          python3 tools/compare_bench.py \
-            build/stockless-src/src/stockless-unprofiled \
-            build/stockless-src/src/stockless \
-            --depth 10 --rounds 4 2>&1 | tee pgo-bench.txt
+          python3 tools/compare_bench.py ./candidate-stockless \
+            build/stockless-src/src/stockless --depth 12 --rounds 6 \
+            2>&1 | tee pgo-bench.txt
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Stockless-optimization-benchmark
+          name: Stockless-search-fastpath-bench
           path: |
             before-after-bench.txt
             pgo-bench.txt
+          if-no-files-found: warn
+
+  preliminary-stockfish-match:
+    # Exploratory strength smoke, not statistical proof of positive Elo.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install opening generator
+        run: python3 -m pip install --disable-pip-version-check chess
+      - name: Install Cute Chess 1.5.1
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage \
+            https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - name: Generate legal openings and build both engines
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 tools/make_openings.py tests/opening_lines.txt tests/openings.epd
+          python3 tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          make -C upstream/stockfish/src -j2 build ARCH=x86-64-avx2
+
+      - name: Short paired Stockless vs pinned Stockfish match
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p results
+          STOCKLESS_AGGRESSION=145 STOCKLESS_OVERDRIVE=false \
+            CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+              "$PWD/upstream/stockfish/src/stockfish" Stockfish \
+              "$PWD/results/stockfish-vs-stockless.pgn" 192 0.5+0.005 1 \
+              2>&1 | tee results/stockfish-vs-stockless.log
+          python3 tools/match_summary.py results/stockfish-vs-stockless.pgn Stockless \
+            | tee results/stockfish-vs-stockless-summary.txt
+
+      - name: Report preliminary match
+        if: always()
+        shell: bash
+        run: |
+          echo "## Preliminary paired match (192 games, 0.5+0.005, 1 thread)" >> "$GITHUB_STEP_SUMMARY"
+          echo "The result is exploratory, not an SPRT pass or proof of a Stockfish 19 win." >> "$GITHUB_STEP_SUMMARY"
+          cat results/*summary.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Stockless-search-fastpath-arena
+          path: results/
           if-no-files-found: warn

@@ -1,4 +1,4 @@
-name: Stockless v0.7.1 universal build and release
+name: Stockless v0.8.9 universal build and release
 
 on:
   pull_request:
@@ -13,12 +13,13 @@ on:
     paths:
       - ".github/workflows/universal-release.yml"
       - "src/stockless/config.h"
+      - "engine-branding.json"
       - "tools/package_release.py"
-      - "docs/UNIVERSAL_RELEASE.md"
+      - "docs/RELEASE_v0.8.9.md"
   workflow_dispatch:
 
 concurrency:
-  group: universal-v071-${{ github.ref }}
+  group: universal-v089-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -49,7 +50,9 @@ jobs:
           BIN=build/stockless-src/src/stockless
           test -x "$BIN"
           printf 'uci\nisready\nquit\n' | "$BIN" | tee linux-uci.txt
-          grep -qx 'id name Stockless v0.7.1' linux-uci.txt
+          EXPECTED=$(python -c "import sys;sys.path.insert(0,'tools');from package_release import read_version;print(read_version())")
+          test "$EXPECTED" = "v0.8.9"
+          grep -Fx "id name Stockless $EXPECTED" linux-uci.txt
           grep -qx 'uciok' linux-uci.txt
           grep -qx 'readyok' linux-uci.txt
           "$BIN" bench 16 1 8 default depth 2>&1 | tee linux-bench.txt
@@ -61,8 +64,8 @@ jobs:
             --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.7.1-linux-x86_64-universal
-          path: dist/Stockless-v0.7.1-linux-x86_64-universal.zip
+          name: stockless-v0.8.9-linux-x86_64-universal
+          path: dist/Stockless-v0.8.9-linux-x86_64-universal.zip
           if-no-files-found: error
 
   linux-arm64:
@@ -86,7 +89,9 @@ jobs:
           set -euo pipefail
           BIN=build/stockless-src/src/stockless
           printf 'uci\nisready\nquit\n' | "$BIN" | tee arm64-uci.txt
-          grep -qx 'id name Stockless v0.7.1' arm64-uci.txt
+          EXPECTED=$(python -c "import sys;sys.path.insert(0,'tools');from package_release import read_version;print(read_version())")
+          test "$EXPECTED" = "v0.8.9"
+          grep -Fx "id name Stockless $EXPECTED" arm64-uci.txt
           grep -qx 'readyok' arm64-uci.txt
           "$BIN" bench 16 1 8 default depth 2>&1 | tee arm64-bench.txt
           grep -q 'Nodes searched' arm64-bench.txt
@@ -96,8 +101,8 @@ jobs:
             --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.7.1-linux-arm64-universal
-          path: dist/Stockless-v0.7.1-linux-arm64-universal.zip
+          name: stockless-v0.8.9-linux-arm64-universal
+          path: dist/Stockless-v0.8.9-linux-arm64-universal.zip
           if-no-files-found: error
 
   windows-x86_64:
@@ -134,7 +139,9 @@ jobs:
           if (-not (Test-Path $bin)) { throw "Missing universal Windows exe" }
           $uci = @("uci", "isready", "quit") | & $bin
           if ($LASTEXITCODE -ne 0) { throw "UCI engine exited with $LASTEXITCODE" }
-          if ($uci -notcontains "id name Stockless v0.7.1") { throw "Wrong UCI version: $uci" }
+          $version = python -c "import sys;sys.path.insert(0,'tools');from package_release import read_version;print(read_version())"
+          if ($version -ne "v0.8.9") { throw "Unexpected release version: $version" }
+          if ($uci -notcontains "id name Stockless $version") { throw "Wrong UCI version: expected Stockless $version; got $uci" }
           if ($uci -notcontains "uciok" -or $uci -notcontains "readyok") { throw "UCI handshake failed" }
           & $bin bench 16 1 8 default depth 2>&1 | Tee-Object -FilePath windows-bench.txt
           if ($LASTEXITCODE -ne 0) { throw "Universal Windows bench failed" }
@@ -148,8 +155,8 @@ jobs:
             --binary build/stockless-src/src/stockless.exe --source-sha "$env:GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.7.1-windows-x86_64-universal
-          path: dist/Stockless-v0.7.1-windows-x86_64-universal.zip
+          name: stockless-v0.8.9-windows-x86_64-universal
+          path: dist/Stockless-v0.8.9-windows-x86_64-universal.zip
           if-no-files-found: error
 
   android:
@@ -209,12 +216,12 @@ jobs:
             --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.7.1-android-${{ matrix.abi }}
-          path: dist/Stockless-v0.7.1-android-${{ matrix.abi }}.zip
+          name: stockless-v0.8.9-android-${{ matrix.abi }}
+          path: dist/Stockless-v0.8.9-android-${{ matrix.abi }}.zip
           if-no-files-found: error
 
   publish:
-    name: Publish verified Stockless v0.7.1 Release
+    name: Publish verified Stockless v0.8.9 Release
     needs: [linux-x86_64, linux-arm64, windows-x86_64, android]
     if: >-
       github.event_name != 'pull_request' &&
@@ -228,7 +235,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: stockless-v0.7.1-*
+          pattern: stockless-v0.8.9-*
           path: release-assets
           merge-multiple: true
       - name: Verify all OS archives, UCI version, checksums and manifests
@@ -244,14 +251,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG=Stockless_v0.7.1
+          TAG=Stockless_v0.8.9
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; refusing to overwrite a published release" >&2
             exit 1
           fi
           gh release create "$TAG" release-assets/*.zip release-assets/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
-            --title "Stockless v0.7.1 — Universal Windows, Linux & Android" \
-            --notes-file docs/UNIVERSAL_RELEASE.md \
+            --title "Stockless v0.8.9 — Universal Windows, Linux & Android" \
+            --notes-file docs/RELEASE_v0.8.9.md \
             --latest
           gh release view "$TAG" --json url,tagName,assets

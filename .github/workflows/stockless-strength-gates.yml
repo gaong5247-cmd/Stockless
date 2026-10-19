@@ -1,0 +1,146 @@
+name: Stockless strength gates (independent openings)
+
+# Exploratory paired games. Follow with SPRT STC/LTC before publishing Elo claims.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/stockless-strength-gates.yml"
+      - "tools/materialize.py"
+      - "src/stockless/**"
+      - "scripts/run-cutechess-match.sh"
+      - "tests/test_cutechess_defaults.py"
+  workflow_dispatch:
+
+jobs:
+  strength-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check arena configuration and release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/test_cutechess_defaults.py
+          bash -n scripts/run-cutechess-match.sh
+
+      - name: Fetch Cute Chess 1.5.1
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage \
+            https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+
+      - name: Fetch Stockfish's independent official eight-move PGN book
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # Pin official-stockfish/books to a known revision (CC0-1.0 book).
+          BOOK_REV=a804a97e709f40aa75a00f9d19e84915b7a3a45c
+          curl -L --fail --retry 3 \
+            "https://raw.githubusercontent.com/official-stockfish/books/$BOOK_REV/8moves_v3.pgn.zip" \
+            -o official-8moves.zip
+          BOOK_FILE=$(unzip -Z1 official-8moves.zip | grep -E '\.pgn$' | head -1)
+          test -n "$BOOK_FILE"
+          unzip -p official-8moves.zip "$BOOK_FILE" > tests/official-8moves.pgn
+          test -s tests/official-8moves.pgn
+          grep -qm1 '^\[' tests/official-8moves.pgn
+
+      - name: Build candidate Stockless for identical CPU ISA
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          test -x build/stockless-src/src/stockless
+
+      - name: Build the exact unmodified PR-base Stockless
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE_SHA=$(git rev-parse HEAD^1)
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          git worktree add --detach ../stockless-baseline "$BASE_SHA"
+          git -C ../stockless-baseline submodule update --init --recursive
+          (
+            cd ../stockless-baseline
+            python3 tools/materialize.py
+            make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          )
+          test -x ../stockless-baseline/build/stockless-src/src/stockless
+
+      - name: Build official Stockfish 19 tag (not later dev)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch sf_19 \
+            https://github.com/official-stockfish/Stockfish.git official-sf19
+          test "$(git -C official-sf19 rev-parse HEAD)" = "edb0d9db6731067ec50ce619ff372b463bc4dd5d"
+          make -C official-sf19/src -j2 build ARCH=x86-64-avx2
+          test -x official-sf19/src/stockfish
+
+      - name: Candidate versus unchanged Stockless baseline (512 paired-color games)
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p results
+          STOCKLESS="$PWD/build/stockless-src/src/stockless" \
+          OPENINGS="$PWD/tests/official-8moves.pgn" STOCKLESS_OPENING_FORMAT=pgn \
+          STOCKLESS_AGGRESSION=145 STOCKLESS_OVERDRIVE=false \
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/../stockless-baseline/build/stockless-src/src/stockless" StocklessBaseline \
+            "$PWD/results/baseline-vs-candidate.pgn" 512 0.5+0.005 1 \
+            2>&1 | tee results/baseline-vs-candidate.log
+          python3 tools/match_summary.py results/baseline-vs-candidate.pgn Stockless \
+            | tee results/baseline-vs-candidate-summary.txt
+
+      - name: Candidate versus official Stockfish 19 (256 paired-color games)
+        shell: bash
+        run: |
+          set -o pipefail
+          STOCKLESS="$PWD/build/stockless-src/src/stockless" \
+          OPENINGS="$PWD/tests/official-8moves.pgn" STOCKLESS_OPENING_FORMAT=pgn \
+          STOCKLESS_AGGRESSION=145 STOCKLESS_OVERDRIVE=false \
+          CUTECHESS="$CUTECHESS" bash scripts/run-cutechess-match.sh \
+            "$PWD/official-sf19/src/stockfish" Stockfish19 \
+            "$PWD/results/stockfish19-vs-candidate.pgn" 256 0.5+0.005 1 \
+            2>&1 | tee results/stockfish19-vs-candidate.log
+          python3 tools/match_summary.py results/stockfish19-vs-candidate.pgn Stockless \
+            | tee results/stockfish19-vs-candidate-summary.txt
+
+      - name: Summarize both exploratory strength comparisons
+        if: always()
+        shell: bash
+        run: |
+          echo "## Stockless independent-opening paired games" >> "$GITHUB_STEP_SUMMARY"
+          echo "PGN openings: official Stockfish 8moves_v3, pinned at a804a97e." >> "$GITHUB_STEP_SUMMARY"
+          echo "CPU ISA: x86-64-avx2; 1 thread; Hash=32MiB; TC=0.5+0.005; 145 / Overdrive OFF." >> "$GITHUB_STEP_SUMMARY"
+          echo "These are short preliminary tests, not a statistically confirmed Elo increase or SPRT pass." >> "$GITHUB_STEP_SUMMARY"
+          for name in baseline-vs-candidate stockfish19-vs-candidate; do
+            echo "### $name" >> "$GITHUB_STEP_SUMMARY"
+            echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+            cat "results/$name-summary.txt" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+            echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Stockless-strength-gates-paired-independent-openings
+          path: results/
+          if-no-files-found: warn

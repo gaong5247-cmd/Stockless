@@ -155,6 +155,8 @@ def materialize(out: Path) -> None:
 """
     node_patch = """    // No atomic UCI option reloads in the hot per-move policy loop.
     const auto stocklessSettings = Stockless::search_settings();
+    // Preserve the exact pre-move attack-map snapshot. Delaying this
+    // read to after earlier searches changed depth-limited node counts.
     const auto stocklessThreat =
       Stockless::compute_threat_signal(pos, int(depth), ss->ttPv || PvNode || depth >= 8,
                                        stocklessSettings);
@@ -168,13 +170,19 @@ def materialize(out: Path) -> None:
     )
     replace_once(search_cpp, node_anchor, node_patch)
 
-    policy_anchor = """        // Increase reduction for ttPv nodes
-        // (*Scaler) Larger values scale well.
-        if (ss->ttPv)
-            r += 929;
+    # The original v0.7 policy was computed for EVERY legal move before Step 15,
+    # including moves discarded by Stockfish's native futility/SEE pruning.
+    # Only opt-in desktop Overdrive can change Step 15's pruning depth.
+    # For the default policy, preserve the original attack-map snapshot,
+    # but delay policy arithmetic until after pruning without bypassing the
+    # first/shallow-move policy while validating decision equivalence.
+    policy_factory_anchor = """    int moveCount = 0;
 """
-    policy_patch = policy_anchor + """
-        const auto stocklessPolicy = Stockless::make_search_policy({
+    policy_factory_patch = policy_factory_anchor + """
+    // Build the policy only when needed, against the original node's
+    // precomputed threat signal, with no change to feature timing.
+    const auto stocklessPolicyForMove = [&]() noexcept {
+        return Stockless::make_search_policy({
           int(depth),
           moveCount,
           int(beta - alpha),
@@ -189,8 +197,36 @@ def materialize(out: Path) -> None:
           cutNode,
           stocklessThreat,
         }, stocklessSettings);
+    };
+"""
+    replace_once(search_cpp, policy_factory_anchor, policy_factory_patch)
+
+    policy_anchor = """        // Increase reduction for ttPv nodes
+        // (*Scaler) Larger values scale well.
+        if (ss->ttPv)
+            r += 929;
+"""
+    policy_patch = policy_anchor + """
+        Stockless::SearchPolicy stocklessPolicy{};
+        // Desktop Overdrive alone can alter Step 15 pruning. Preserve its
+        // original pre-pruning timing, including on the first move.
+        if (stocklessSettings.hybrid && stocklessSettings.overdrive
+            && !stocklessSettings.mobile)
+            stocklessPolicy = stocklessPolicyForMove();
 """
     replace_once(search_cpp, policy_anchor, policy_patch)
+
+    late_policy_anchor = "        // Step 16. Singular Extensions\n"
+    late_policy_patch = """
+        // Preserve the original policy evaluation for each surviving move,
+        // including first moves and shallow depths, while we isolate the
+        // node-count difference in the pruning-stage experiment.
+        if (stocklessSettings.hybrid
+            && (!stocklessSettings.overdrive || stocklessSettings.mobile))
+            stocklessPolicy = stocklessPolicyForMove();
+
+""" + late_policy_anchor
+    replace_once(search_cpp, late_policy_anchor, late_policy_patch)
 
     # Stockless quietMoveAllowance was always zero: do not patch the native
     # Stockfish late-move pruning threshold or carry a dead policy field.
