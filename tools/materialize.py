@@ -174,8 +174,8 @@ def materialize(out: Path) -> None:
     # including moves discarded by Stockfish's native futility/SEE pruning.
     # Only opt-in desktop Overdrive can change Step 15's pruning depth.
     # For the default policy, preserve the original attack-map snapshot,
-    # but delay policy arithmetic until after pruning, and skip depth-1/first moves
-    # which cannot use LMR or the opt-in re-search bonus.
+    # but delay policy arithmetic until after pruning without bypassing the
+    # first/shallow-move policy while validating decision equivalence.
     policy_factory_anchor = """    int moveCount = 0;
 """
     policy_factory_patch = policy_factory_anchor + """
@@ -218,11 +218,11 @@ def materialize(out: Path) -> None:
 
     late_policy_anchor = "        // Step 16. Singular Extensions\n"
     late_policy_patch = """
-        // All other Stockless policy effects start at LMR (depth >= 2,
-        // moveCount > 1). Avoid spending CPU on discarded or first moves.
+        // Preserve the original policy evaluation for each surviving move,
+        // including first moves and shallow depths, while we isolate the
+        // node-count difference in the pruning-stage experiment.
         if (stocklessSettings.hybrid
-            && (!stocklessSettings.overdrive || stocklessSettings.mobile)
-            && depth >= 2 && moveCount > 1)
+            && (!stocklessSettings.overdrive || stocklessSettings.mobile))
             stocklessPolicy = stocklessPolicyForMove();
 
 """ + late_policy_anchor
