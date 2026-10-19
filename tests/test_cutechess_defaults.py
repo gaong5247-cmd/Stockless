@@ -20,7 +20,7 @@ def inspect_args(overrides: dict[str, str]) -> list[str]:
 
         env = os.environ.copy()
         for key in ("STOCKLESS_AGGRESSION", "STOCKLESS_OVERDRIVE", "STOCKLESS_THREATS",
-                    "STOCKLESS_MOBILE"):
+                    "STOCKLESS_MOBILE", "STOCKLESS_OPENING_FORMAT"):
             env.pop(key, None)
         env.update(overrides)
         env.update(
@@ -48,7 +48,10 @@ def main() -> None:
 
     custom = inspect_args({"STOCKLESS_AGGRESSION": "165",
                            "STOCKLESS_OVERDRIVE": "true",
-                           "STOCKLESS_THREATS": "false"})
+                           "STOCKLESS_THREATS": "false",
+                           "STOCKLESS_OPENING_FORMAT": "pgn"})
+    assert "format=epd" in defaults
+    assert "format=pgn" in custom
     for expected in ("option.StocklessAggression=165", "option.StocklessOverdrive=true",
                      "option.StocklessThreats=false"):
         assert expected in custom, f"Overriding {expected} failed: {custom}"
