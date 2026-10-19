@@ -23,6 +23,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CUTECHESS=${CUTECHESS:-cutechess-cli}
 STOCKLESS=${STOCKLESS:-"$ROOT/build/stockless-src/src/stockless"}
 OPENINGS=${OPENINGS:-"$ROOT/tests/openings.epd"}
+OPENING_FORMAT=${STOCKLESS_OPENING_FORMAT:-epd}
 
 if (( GAMES % 2 != 0 )); then
   echo "GAMES must be even so -repeat can swap colors fairly" >&2
@@ -43,7 +44,7 @@ mkdir -p "$(dirname "$OUT_PGN")"
   -games "$GAMES" \
   -repeat \
   -concurrency "$CONCURRENCY" \
-  -openings file="$OPENINGS" format=epd order=random \
+  -openings file="$OPENINGS" format="$OPENING_FORMAT" order=random \
   -draw movenumber=40 movecount=8 score=10 \
   -resign movecount=4 score=700 \
   -recover \
