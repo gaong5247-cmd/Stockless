@@ -2,7 +2,7 @@
 
 Pinned upstream networks at bootstrap:
 
-- Stockfish primary net: `nn-134a887f4c8f.nnue`
+- Stockfish primary net (experimental 2026-10-20 SFNNv18 upstream trial): `nn-c9e480e92425.nnue`
 - Reckless reference net: `v60-7f587dfb.nnue`
 
 ## Phase 1 — one evaluator, two research sources

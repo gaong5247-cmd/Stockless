@@ -62,12 +62,20 @@ jobs:
           )
           cp ../stockless-reference/build/stockless-src/src/stockless reference-stockless
 
-      - name: Interleaved depth-12 bench with exact node-count guard
+      - name: Interleaved depth-12 bench (exact nodes only with same upstream)
         shell: bash
         run: |
-          set -o pipefail
-          python3 tools/compare_bench.py ./reference-stockless ./candidate-stockless \
-            --depth 12 --rounds 6 2>&1 | tee before-after-bench.txt
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA" "$GITHUB_SHA" -- upstream/stockfish; then
+            echo "Unchanged Stockfish base: strict node-equivalence gate."
+            python3 tools/compare_bench.py ./reference-stockless ./candidate-stockless \
+              --depth 12 --rounds 6 2>&1 | tee before-after-bench.txt
+          else
+            echo "Upstream gitlink changed: depth-12 search trees may differ."
+            echo "NPS comparison is exploratory; judge playing strength by paired games."
+            python3 tools/compare_bench.py ./reference-stockless ./candidate-stockless \
+              --depth 12 --rounds 6 --allow-different-nodes 2>&1 | tee before-after-bench.txt
+          fi
 
       - name: Build CPU-profiled candidate (explicit request only)
         if: github.event_name == 'workflow_dispatch'

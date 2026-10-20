@@ -12,7 +12,7 @@ RECKLESS = ROOT / "upstream" / "reckless"
 OVERLAY = ROOT / "src" / "stockless"
 DEFAULT_OUT = ROOT / "build" / "stockless-src"
 
-STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
+STOCKFISH_SHA = "effdc3fd3f6de6e75fe1374a51a7a7eed66f880b"
 RECKLESS_SHA = "7300f044812d80397960e3a27a4f085e9487419a"
 def stockless_version() -> str:
     import re

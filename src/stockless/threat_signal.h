@@ -25,8 +25,12 @@ struct ThreatSignal {
 // matching Position::attacks_by<QUEEN>() without an extra queen dispatch.
 // Knights are occupancy independent. No king attacks were present in v0.7.
 inline Bitboard attacks_for(const Position& pos, Color c) noexcept {
-    Bitboard attacks = pos.attacks_by<PAWN>(c);
     const Bitboard occupied = pos.pieces();
+    // Stockfish 2026-10-17 replaced Position::attacks_by<PAWN>() with
+    // xattacks_by(PAWN, color, occupied). For pawns this returns exactly
+    // the same color-specific pawn attack bitboard; the king x-ray rule
+    // does not change the pawn case.
+    Bitboard attacks = pos.xattacks_by(PAWN, c, occupied);
 
     Bitboard knights = pos.pieces(c, KNIGHT);
     while (knights)
