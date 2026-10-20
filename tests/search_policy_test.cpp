@@ -107,7 +107,14 @@ int main() {
             {int(next() % 257), int(next() % 257), int(next() % 257)}
         };
         const auto actual = make_search_policy(in, settings);
-        same(actual, reference_policy(in, settings));
+        // Frozen v0.7 disagrees only for the old mobile-Overdrive cap
+        // bug. Mobile is supposed to ignore Overdrive, including its cap.
+        SearchSettings normalized = settings;
+        if (normalized.mobile)
+            normalized.overdrive = false;
+        same(actual, reference_policy(in, normalized));
+        if (settings.mobile && settings.hybrid)
+            same(actual, make_search_policy(in, normalized));
         assert(actual.lmrAdjustment <= 0);
         assert(actual.pruningDepthBoost >= 0 && actual.pruningDepthBoost <= 2);
         assert(actual.reSearchDepthBonus >= 0 && actual.reSearchDepthBonus <= 1);

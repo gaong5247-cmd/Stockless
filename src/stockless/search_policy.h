@@ -81,10 +81,15 @@ inline SearchPolicy make_search_policy(const SearchInputs& in,
     if (in.window <= 32 && (in.pvNode || in.ttPv))
         buyback += 40;
 
+    // Mobile Overdrive is disabled. Use ONE consistent enable flag for
+    // tactical extensions AND the LMR cap; previously the cap could grow
+    // on mobile even though the Overdrive extensions were disabled.
+    const bool desktopOverdrive = settings.overdrive && !settings.mobile;
+
     // v0.5 Selective Overdrive:
     // never loosen quiet pruning globally. Only verified forcing geometry gets
     // the expensive treatment.
-    if (settings.overdrive && !settings.mobile)
+    if (desktopOverdrive)
     {
         const bool forcingCheck = in.givesCheck && out.pressure >= 176;
         const bool kingEmergency = out.danger >= 224;
@@ -107,7 +112,7 @@ inline SearchPolicy make_search_policy(const SearchInputs& in,
             out.reSearchDepthBonus = 1;
     }
 
-    out.lmrAdjustment = -std::min(cap + (settings.overdrive ? 192 : 0), buyback);
+    out.lmrAdjustment = -std::min(cap + (desktopOverdrive ? 192 : 0), buyback);
     return out;
 }
 
