@@ -1,0 +1,110 @@
+name: research - hybrid/threat ablation (not a strength claim)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/hybrid-threat-ablation.yml"
+      - "tools/uci_ablation_bench.py"
+      - "tests/test_uci_ablation_bench.py"
+  workflow_dispatch:
+
+jobs:
+  ablate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate the benchmark harness
+        run: |
+          python3 -m py_compile tools/uci_ablation_bench.py tests/test_uci_ablation_bench.py
+          python3 tests/test_uci_ablation_bench.py
+      - name: Materialize and compile one identical executable for all ablations
+        run: |
+          python3 tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          test -x build/stockless-src/src/stockless
+      - name: Interleave fixed-depth UCI tests (descriptive, NOT Elo)
+        run: |
+          mkdir -p results
+          python3 tools/uci_ablation_bench.py build/stockless-src/src/stockless \
+            --depth 12 --rounds 4 --json-output results/ablation-bench.json \
+            2>&1 | tee results/ablation-bench.txt
+      - name: Install fixed Cute Chess runner
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage \
+            https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - name: Download independent official Stockfish opening book
+        shell: bash
+        run: |
+          set -euxo pipefail
+          REV=a804a97e709f40aa75a00f9d19e84915b7a3a45c
+          curl -L --fail --retry 3 \
+            "https://raw.githubusercontent.com/official-stockfish/books/$REV/8moves_v3.pgn.zip" \
+            -o official-8moves.zip
+          BOOK=$(unzip -Z1 official-8moves.zip | grep -E '\.pgn$' | head -1)
+          test -n "$BOOK"
+          unzip -p official-8moves.zip "$BOOK" > tests/official-8moves.pgn
+          test -s tests/official-8moves.pgn
+      - name: Color-paired NoThreats and HybridOff ablations (256 games each)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="$PWD/build/stockless-src/src/stockless"
+          BOOK="$PWD/tests/official-8moves.pgn"
+          for mode in NoThreats HybridOff; do
+            case "$mode" in
+              NoThreats) HYBRID=true; THREATS=false;;
+              HybridOff) HYBRID=false; THREATS=false;;
+            esac
+            "$CUTECHESS" -tournament round-robin \
+              -engine name=FullHybrid cmd="$BIN" \
+                option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
+                option.StocklessHybrid=true option.StocklessAggression=145 \
+                option.StocklessThreats=true option.StocklessOverdrive=false \
+                option.StocklessThreatHistory=false option.StocklessMobile=false \
+              -engine name="$mode" cmd="$BIN" \
+                option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
+                option.StocklessHybrid="$HYBRID" option.StocklessAggression=145 \
+                option.StocklessThreats="$THREATS" option.StocklessOverdrive=false \
+                option.StocklessThreatHistory=false option.StocklessMobile=false \
+              -each proto=uci tc=0.5+0.005 \
+              -games 256 -repeat -concurrency 2 \
+              -openings file="$BOOK" format=pgn order=random \
+              -draw movenumber=40 movecount=8 score=10 \
+              -resign movecount=4 score=700 -recover \
+              -pgnout "results/$mode.pgn" 2>&1 | tee "results/$mode.log"
+            python3 tools/match_summary.py "results/$mode.pgn" "$mode" \
+              | tee "results/$mode-summary.txt"
+          done
+      - name: Clarify evidence standards
+        if: always()
+        shell: bash
+        run: |
+          echo "## Hybrid/threat ablation: controlled configurations, same executable" >> "$GITHUB_STEP_SUMMARY"
+          echo "Two independent 256-game opening-paired quick tests (0.5+0.005, 1 thread, AVX2)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Exploratory ONLY. No positive/negative Elo claim from NPS or these small samples." >> "$GITHUB_STEP_SUMMARY"
+          for f in results/*summary.txt; do
+            [ ! -f "$f" ] && continue
+            echo "### $f" >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stockless-hybrid-ablation-research
+          path: results/
+          if-no-files-found: warn
