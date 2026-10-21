@@ -101,6 +101,33 @@ def main() -> None:
                 if best.split()[1] in {"(none)", "0000"}:
                     raise AssertionError(f"Unexpected bestmove: {best}")
                 print(f"ThreatHistory={enabled}: {best}")
+
+            # A SearchSettings snapshot must be refreshed on *every* UCI go,
+            # including helper Workers. Exercise successive searches with
+            # different hybrid/threats/aggression settings in one process.
+            send("setoption name Threads value 2")
+            for hybrid, threats, aggression in (
+                ("false", "false", 0),
+                ("true", "false", 75),
+                ("true", "true", 145),
+                ("false", "true", 200),
+            ):
+                send("ucinewgame")
+                send(f"setoption name StocklessHybrid value {hybrid}")
+                send(f"setoption name StocklessThreats value {threats}")
+                send(f"setoption name StocklessAggression value {aggression}")
+                send("setoption name StocklessThreatHistory value false")
+                send("isready")
+                wait_for(lines, "readyok")
+                send("position startpos moves e2e4 e7e5 g1f3 b8c6")
+                send("go depth 7")
+                best = wait_for(lines, "bestmove ", 60.0)
+                if best.split()[1] in {"(none)", "0000"}:
+                    raise AssertionError(f"Unexpected bestmove after options changed: {best}")
+                print(
+                    f"Per-go option refresh: hybrid={hybrid} threats={threats} "
+                    f"aggression={aggression} threads=2: {best}"
+                )
         finally:
             if proc.poll() is None:
                 send("quit")
