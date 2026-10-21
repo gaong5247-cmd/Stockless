@@ -21,13 +21,13 @@ The initial (side-occupancy reuse only) change was checked in GitHub Actions:
 
 ### Candidate B — per-go UCI option snapshots (current unverified experiment)
 
-Previously, each main search node executed \`Stockless::search_settings()\`, loading multiple relaxed atomics to get unchanged option values. The materializer now inserts a \`SearchSettings\` member into each Stockfish search Worker, writes it once upon entry to \`Worker::start_searching()\` on each UCI \`go\`, and reads only that local immutable snapshot in the recursive hot path. Both main and helper workers refresh it. Correctness assumption remains unchanged: UCI \`setoption\` happens *between* searches, not during \`go\`. The automated UCI smoke test now performs multiple \`go\` commands after changing hybrid, threats, aggression and Threads options within one engine process.
+Previously, each main search node executed `Stockless::search_settings()`, loading multiple relaxed atomics to get unchanged option values. The materializer now inserts a `SearchSettings` member into each Stockfish search Worker, writes it once upon entry to `Worker::start_searching()` on each UCI `go`, and reads only that local immutable snapshot in the recursive hot path. Both main and helper workers refresh it. Correctness assumption remains unchanged: UCI `setoption` happens *between* searches, not during `go`. The automated UCI smoke test now performs multiple `go` commands after changing hybrid, threats, aggression and Threads options within one engine process.
 
 **Candidate B's first CI confirmed node-equivalent, preliminary throughput improvement:** [Actions run 39609937714](https://github.com/gaong5247-cmd/Stockless/actions/runs/39609937714) used six interleaved depth-12 tests, all searching exactly 1,078,618 nodes: baseline median 844,649 NPS, candidate median 868,819 NPS (**+2.86%**). Linux, Windows, Android arm64 and Android armv7 build checks also passed in [run 39609937800](https://github.com/gaong5247-cmd/Stockless/actions/runs/39609937800). This remains *one hosted-runner sample*, not repeatable platform-specific speed proof.
 
 ### Candidate C — eliminate remaining disabled ThreatHistory hot-path atomics
 
-The optional ThreatHistory path defaults OFF but was still calling \`threat_history_enabled()\` at every MovePicker construction (reading hybrid and history atomics) and at quiet-list scoring. Cache the activation and weight at Worker go-start, pass the already-gated history pointer, and avoid redundant per-node/per-list enabled reads. Keep the exact existing history attack-map computation and scores when explicitly enabled; disable-state behavior should be unchanged. The new candidate requires its **own** build, UCI multi-search history ON/OFF, exact-node benchmark and further strength checks. Do not reuse B's +2.86% figure as a measured C speedup.
+The optional ThreatHistory path defaults OFF but was still calling `threat_history_enabled()` at every MovePicker construction (reading hybrid and history atomics) and at quiet-list scoring. Cache the activation and weight at Worker go-start, pass the already-gated history pointer, and avoid redundant per-node/per-list enabled reads. Keep the exact existing history attack-map computation and scores when explicitly enabled; disable-state behavior should be unchanged. The new candidate requires its **own** build, UCI multi-search history ON/OFF, exact-node benchmark and further strength checks. Do not reuse B's +2.86% figure as a measured C speedup.
 
 ### Independent pre-existing feature ablation (PR #25; different trees!)
 
@@ -63,3 +63,8 @@ Reuse already-selected side occupancy bitboards in `compute_threat_signal()` rat
 3. Compare threat-map profiling samples / CPU call stacks before implementing caches. Avoid caching mutable `Position` pointers or stale per-position attack maps across make/unmake.
 
 No experimental history module or user-facing option has been deleted here; unsupported dead-code deletion would risk breaking existing workflows.
+
+### Related independent fix
+
+[PR #26](https://github.com/gaong5247-cmd/Stockless/pull/26) already fixes mobile-Overdrive LMR cap consistency and the Windows build-script version label. This performance PR deliberately avoids copying those changes or altering mobile search decisions.
+
