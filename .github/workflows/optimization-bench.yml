@@ -11,6 +11,7 @@ on:
     paths:
       - ".github/workflows/optimization-bench.yml"
       - "tools/materialize.py"
+      - "tools/compare_policy_profiles.py"
       - "src/stockless/**"
       - "tests/search_policy_test.cpp"
       - "tests/test_cutechess_defaults.py"
@@ -33,7 +34,7 @@ jobs:
 
       - name: Validate optimization scripts and arena options
         run: |
-          python3 -m py_compile tools/compare_bench.py tools/materialize.py tests/test_cutechess_defaults.py
+          python3 -m py_compile tools/compare_bench.py tools/compare_policy_profiles.py tools/materialize.py tests/test_cutechess_defaults.py
           bash -n scripts/build-optimized.sh scripts/run-cutechess-match.sh
           python3 tests/test_cutechess_defaults.py
 
@@ -69,6 +70,13 @@ jobs:
           python3 tools/compare_bench.py ./reference-stockless ./candidate-stockless \
             --depth 12 --rounds 6 2>&1 | tee before-after-bench.txt
 
+      - name: Validate nine UCI profiles preserve depth-9 search decisions
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 tools/compare_policy_profiles.py ./reference-stockless ./candidate-stockless \
+            --depth 9 2>&1 | tee policy-profile-equivalence.txt
+
       - name: Build CPU-profiled candidate (explicit request only)
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -89,6 +97,7 @@ jobs:
           name: Stockless-search-fastpath-bench
           path: |
             before-after-bench.txt
+            policy-profile-equivalence.txt
             pgo-bench.txt
           if-no-files-found: warn
 
