@@ -1,0 +1,96 @@
+name: research - v0.8.9 aggression budget screen
+
+# Same binary, fixed-time paired official openings. Never changes defaults.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/v089-aggression-budget-screen.yml"
+      - "docs/AGGRESSION_SCREEN_v089.md"
+  workflow_dispatch:
+
+jobs:
+  strength-screen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build frozen v0.8.9 once for every option profile
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          test -x build/stockless-src/src/stockless
+      - name: Fetch official openings and Cute Chess
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage \
+            https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          CUTE=$(find squashfs-root -type f -name cutechess-cli | head -1)
+          test -n "$CUTE"
+          chmod +x "$CUTE"
+          echo "CUTECHESS=$PWD/$CUTE" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+          REV=a804a97e709f40aa75a00f9d19e84915b7a3a45c
+          curl -L --fail --retry 3 \
+            "https://raw.githubusercontent.com/official-stockfish/books/$REV/8moves_v3.pgn.zip" \
+            -o official-8moves.zip
+          BOOK=$(unzip -Z1 official-8moves.zip | grep -E '\.pgn$' | head -1)
+          test -n "$BOOK"
+          unzip -p official-8moves.zip "$BOOK" > official-8moves.pgn
+          test -s official-8moves.pgn
+      - name: Compare aggression 64, 96 and 112 against 145
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          BIN="$PWD/build/stockless-src/src/stockless"
+          BOOK="$PWD/official-8moves.pgn"
+          for level in 64 96 112; do
+            NAME="Aggression$level"
+            "$CUTECHESS" -tournament round-robin \
+              -engine name=Baseline145 cmd="$BIN" \
+                option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
+                option.StocklessHybrid=true option.StocklessAggression=145 \
+                option.StocklessThreats=true option.StocklessOverdrive=false \
+                option.StocklessThreatHistory=false option.StocklessMobile=false \
+              -engine name="$NAME" cmd="$BIN" \
+                option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
+                option.StocklessHybrid=true option.StocklessAggression="$level" \
+                option.StocklessThreats=true option.StocklessOverdrive=false \
+                option.StocklessThreatHistory=false option.StocklessMobile=false \
+              -each proto=uci tc=0.5+0.005 \
+              -games 256 -repeat -concurrency 2 \
+              -openings file="$BOOK" format=pgn order=random \
+              -draw movenumber=40 movecount=8 score=10 \
+              -resign movecount=4 score=700 -recover \
+              -pgnout "results/$NAME.pgn" 2>&1 | tee "results/$NAME.log"
+            python3 tools/match_summary.py "results/$NAME.pgn" "$NAME" \
+              | tee "results/$NAME-summary.txt"
+          done
+      - name: Publish summaries without auto-selecting defaults
+        if: always()
+        shell: bash
+        run: |
+          echo "## v0.8.9 aggression budget screen (exploratory)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Same executable and official book, 1 thread, 32MiB, 0.5+0.005, 256 paired-color games per level." >> "$GITHUB_STEP_SUMMARY"
+          echo "Screening only. No Elo superiority claimed and no default modified." >> "$GITHUB_STEP_SUMMARY"
+          for f in results/*summary.txt; do
+            test -f "$f" || continue
+            echo "### $f" >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stockless-v089-aggression-budget-screen
+          path: results/
+          if-no-files-found: warn
