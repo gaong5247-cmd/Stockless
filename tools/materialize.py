@@ -98,24 +98,22 @@ def materialize(out: Path) -> None:
     policy_factory_anchor = """    int moveCount = 0;
 """
     policy_factory_patch = policy_factory_anchor + """
-    // Build the policy only when needed, against the original node's
-    // precomputed threat signal, with no change to feature timing.
+    // Prepare features immutable throughout this node's move loop once.
+    // Do not hoist beta-alpha or the next ply's cutoff counter: both may
+    // change between moves searched in the same node.
+    const auto stocklessPolicyBase = Stockless::prepare_search_policy({
+        int(depth),
+        stocklessCorrectionSignal,
+        improving,
+        ss->inCheck,
+        PvNode,
+        cutNode,
+        stocklessThreat,
+    }, stocklessSettings);
     const auto stocklessPolicyForMove = [&]() noexcept {
-        return Stockless::make_search_policy({
-          int(depth),
-          moveCount,
-          int(beta - alpha),
-          stocklessCorrectionSignal,
-          int((ss + 1)->cutoffCnt),
-          improving,
-          capture,
-          givesCheck,
-          ss->inCheck,
-          ss->ttPv,
-          PvNode,
-          cutNode,
-          stocklessThreat,
-        }, stocklessSettings);
+        return Stockless::make_prepared_move_policy(
+          stocklessPolicyBase, moveCount, int(beta - alpha),
+          int((ss + 1)->cutoffCnt), ss->ttPv, capture, givesCheck);
     };
 """
     replace_once(search_cpp, policy_factory_anchor, policy_factory_patch)
