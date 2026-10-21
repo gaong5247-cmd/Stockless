@@ -86,6 +86,12 @@ int main() {
     const SearchSettings stored = search_settings();
     assert(stored.hybrid && !stored.threats && stored.overdrive
            && stored.mobile && stored.aggression == 145);
+    // The captured per-go state stays immutable after a later UCI change.
+    set_threats_enabled(true);
+    set_hybrid_aggression(67);
+    const auto nextGo = search_settings();
+    assert(!stored.threats && stored.aggression == 145);
+    assert(nextGo.threats && nextGo.aggression == 67);
 
     // Deterministically cover both optional modes, mobile mode, depth,
     // checks/captures, tactical signal values and alpha-beta windows.
