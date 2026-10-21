@@ -71,9 +71,10 @@ inline constexpr int default_hybrid_aggression() noexcept {
     return DefaultHybridAggression;
 }
 
-// UCI option state is stable for a search. Snapshot its atomics once per
-// node, rather than reloading them for every legal move. Never mutate this
-// snapshot during search; UCI setoption must be applied between searches.
+// UCI option state is stable during a search. Every Worker copies these
+// atomics once at start_searching() (the beginning of 'go') and reuses its
+// private snapshot at every recursive node. UCI setoption must be applied
+// between searches; changing options in-flight is intentionally unsupported.
 struct SearchSettings {
     bool hybrid;
     bool threats;
