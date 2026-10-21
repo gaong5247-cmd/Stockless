@@ -27,7 +27,13 @@ Previously, each main search node executed `Stockless::search_settings()`, loadi
 
 ### Candidate C — eliminate remaining disabled ThreatHistory hot-path atomics
 
-The optional ThreatHistory path defaults OFF but was still calling `threat_history_enabled()` at every MovePicker construction (reading hybrid and history atomics) and at quiet-list scoring. Cache the activation and weight at Worker go-start, pass the already-gated history pointer, and avoid redundant per-node/per-list enabled reads. Keep the exact existing history attack-map computation and scores when explicitly enabled; disable-state behavior should be unchanged. The new candidate requires its **own** build, UCI multi-search history ON/OFF, exact-node benchmark and further strength checks. Do not reuse B's +2.86% figure as a measured C speedup.
+The optional ThreatHistory path defaults OFF but was still calling `threat_history_enabled()` at every MovePicker construction (reading hybrid and history atomics) and at quiet-list scoring. Cache the activation and weight at Worker go-start, pass the already-gated history pointer, and avoid redundant per-node/per-list enabled reads. Keep the exact existing history attack-map computation and scores when explicitly enabled; disable-state behavior should be unchanged. Current-head CI compiles on Linux, Windows and both Android ABIs and passes UCI smoke: [build run 39611339428](https://github.com/gaong5247-cmd/Stockless/actions/runs/39611339428). Relative to the original v0.8.9, a separate six-run depth-12 benchmark produced 914,088 -> 916,413 median NPS (**+0.25%**), with identical 1,078,618 nodes: [run 39611339394](https://github.com/gaong5247-cmd/Stockless/actions/runs/39611339394). This is not compelling evidence of a reproducible gain.
+
+To **isolate C from B on identical hardware** rather than comparing hosted VMs, [draft PR #29](https://github.com/gaong5247-cmd/Stockless/pull/29) uses frozen B as its PR base: six interleaved AB/BA bench runs on one runner gave B 1,484,678 vs C 1,491,866 median NPS (**+0.48%; four of six pairs faster**), identical 1,078,618 nodes [run 39612226711](https://github.com/gaong5247-cmd/Stockless/actions/runs/39612226711). No repeatable significant performance win can be claimed yet.
+
+Per-go snapshot B's exploratory independent-opening matches were mixed: versus frozen Stockless v0.8.9 it scored 73 W / 337 D / 102 L in 512 (47.168%, estimated -19.7 +/- 17.6 Elo), but versus Stockfish 19 it scored 58 W / 157 D / 41 L in 256 (53.320%, estimated +23.1 +/- 26.4 Elo). The contradictory short-time-control outcomes reinforce that **fixed-depth equivalence and preliminary NPS alone cannot justify a strength claim**. [Strength run 39609937736](https://github.com/gaong5247-cmd/Stockless/actions/runs/39609937736).
+
+C's latest match comparisons require their own results; do not infer from B or the NPS figures.
 
 ### Independent pre-existing feature ablation (PR #25; different trees!)
 
