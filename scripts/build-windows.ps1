@@ -26,7 +26,11 @@ if ($LASTEXITCODE -ne 0) { throw "Stockless make $Target failed with $LASTEXITCO
 Write-Host ""
 Write-Host "Build complete."
 Write-Host "Binary is under: $EngineSrc"
-Write-Host "UCI identity: Stockless v0.7.2-dev.20261018.1"
+$Config = Get-Content (Join-Path $Root "src/stockless/config.h") -Raw
+if ($Config -notmatch 'Version = "([^"]+)"') {
+    throw "Stockless version declaration missing in config.h"
+}
+Write-Host "UCI identity: Stockless $($Matches[1])"
 Write-Host "Hybrid search is ON by default; Overdrive and ThreatHistory are OFF."
 Write-Host "Enable in UCI with: setoption name StocklessHybrid value true"
 Write-Host "Aggression default: 145 (range 0..200)"
