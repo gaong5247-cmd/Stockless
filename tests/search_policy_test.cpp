@@ -87,6 +87,14 @@ int main() {
     assert(stored.hybrid && !stored.threats && stored.overdrive
            && stored.mobile && stored.aggression == 145);
 
+    // The captured per-go copy must not change after a later setoption;
+    // the next go sees the updated values via a fresh snapshot.
+    set_threats_enabled(true);
+    set_hybrid_aggression(42);
+    const SearchSettings nextSearch = search_settings();
+    assert(stored.aggression == 145 && !stored.threats);
+    assert(nextSearch.aggression == 42 && nextSearch.threats);
+
     // Deterministically cover both optional modes, mobile mode, depth,
     // checks/captures, tactical signal values and alpha-beta windows.
     std::uint32_t seed = 0x53746f63u;

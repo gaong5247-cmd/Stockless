@@ -61,6 +61,11 @@ inline ThreatSignal compute_threat_signal(const Position&      pos,
     const Color us   = pos.side_to_move();
     const Color them = ~us;
 
+    // Each side's full attack map is still computed exactly once. Cache
+    // occupancies and king zones locally to avoid redundant Position lookups
+    // in the hot path; preserve the original signal and decision semantics.
+    const Bitboard ourPieces   = pos.pieces(us);
+    const Bitboard theirPieces = pos.pieces(them);
     const Bitboard ourAttacks   = attacks_for(pos, us);
     const Bitboard theirAttacks = attacks_for(pos, them);
 
@@ -73,8 +78,8 @@ inline ThreatSignal compute_threat_signal(const Position&      pos,
     const int kingContactForUs   = popcount(ourAttacks & theirKingZone);
     const int kingContactAgainst = popcount(theirAttacks & ourKingZone);
 
-    const int attackedEnemy = popcount(ourAttacks & pos.pieces(them));
-    const int attackedUs    = popcount(theirAttacks & pos.pieces(us));
+    const int attackedEnemy = popcount(ourAttacks & theirPieces);
+    const int attackedUs    = popcount(theirAttacks & ourPieces);
 
     // pinners(c) are enemy sliders pinning pieces to color c's king.
     const int pinsWeCreate = popcount(pos.pinners(them));

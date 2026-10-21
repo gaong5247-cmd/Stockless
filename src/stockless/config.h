@@ -97,9 +97,10 @@ inline constexpr int default_threat_history_weight() noexcept {
     return DefaultThreatHistoryWeight;
 }
 
-// UCI option state is stable for a search. Snapshot its atomics once per
-// node, rather than reloading them for every legal move. Never mutate this
-// snapshot during search; UCI setoption must be applied between searches.
+// UCI option state is stable for a search. Each Worker snapshots these
+// relaxed atomics at the beginning of 'go' and reuses that immutable copy
+// at every search node. UCI setoption must be applied between searches.
+// Changing options during a running search is intentionally unsupported.
 struct SearchSettings {
     bool hybrid;
     bool threats;

@@ -74,12 +74,15 @@ def materialize(out: Path) -> None:
     replace_once(
         search_h,
         '#include "history.h"\n',
-        '#include "history.h"\n#include "stockless_core/threat_history.h"\n',
+        '#include "history.h"\n#include "stockless_core/config.h"\n#include "stockless_core/threat_history.h"\n',
     )
     replace_once(
         search_h,
         "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n",
         "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n"
+        "    Stockless::SearchSettings stocklessSearchSettings{};\n"
+        "    bool stocklessHistoryActive = false;\n"
+        "    int stocklessHistoryWeight = 0;\n"
         "    Stockless::ThreatQuietHistory threatQuietHistory;\n",
     )
 
@@ -128,7 +131,7 @@ def materialize(out: Path) -> None:
         "    [[maybe_unused]] int stocklessHistoryWeight = 0;\n"
         "    [[maybe_unused]] Bitboard stocklessEnemyAttacks = 0;\n"
         "    if constexpr (Type == QUIETS)\n"
-        "        if (threatQuietHistory && Stockless::threat_history_enabled())\n"
+        "        if (threatQuietHistory)\n"
         "        {\n"
         "            stocklessHistoryWeight = Stockless::threat_history_weight();\n"
         "            if (stocklessHistoryWeight)\n"
@@ -150,11 +153,24 @@ def materialize(out: Path) -> None:
         '#include "search.h"\n#include "stockless_core/search_policy.h"\n#include "stockless_core/threat_signal.h"\n',
     )
 
+    # Each Worker enters start_searching once per UCI go (including helpers).
+    # Snapshot options there to eliminate relaxed atomic reads at each node.
+    # setoption changes become visible at the next go, never halfway through.
+    replace_once(
+        search_cpp,
+        "void Search::Worker::start_searching() {\n\n    accumulatorStack.reset();\n",
+        "void Search::Worker::start_searching() {\n\n"
+        "    stocklessSearchSettings = Stockless::search_settings();\n"
+        "    stocklessHistoryActive = stocklessSearchSettings.hybrid && Stockless::threat_history_enabled();\n"
+        "    stocklessHistoryWeight = stocklessHistoryActive ? Stockless::threat_history_weight() : 0;\n"
+        "    accumulatorStack.reset();\n",
+    )
+
     node_anchor = """    MovePicker mp(pos, ttData.move, depth, &mainHistory, &lowPlyHistory, &captureHistory, contHist,
                   &sharedHistory, ss->ply);
 """
-    node_patch = """    // No atomic UCI option reloads in the hot per-move policy loop.
-    const auto stocklessSettings = Stockless::search_settings();
+    node_patch = """    // Reuse the per-go, per-Worker option snapshot in every search node.
+    const auto& stocklessSettings = stocklessSearchSettings;
     // Preserve the exact pre-move attack-map snapshot. Delaying this
     // read to after earlier searches changed depth-limited node counts.
     const auto stocklessThreat =
@@ -166,7 +182,7 @@ def materialize(out: Path) -> None:
 """ + node_anchor.replace(
         "                  &sharedHistory, ss->ply);\n",
         "                  &sharedHistory, ss->ply,\n"
-        "                  Stockless::threat_history_enabled() ? &threatQuietHistory : nullptr);\n",
+        "                  stocklessHistoryActive ? &threatQuietHistory : nullptr);\n",
     )
     replace_once(search_cpp, node_anchor, node_patch)
 
@@ -251,8 +267,8 @@ def materialize(out: Path) -> None:
         search_cpp,
         "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n",
         "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n"
-        "        const bool stocklessTrainHistory = Stockless::threat_history_enabled()\n"
-        "                                        && Stockless::threat_history_weight() > 0;\n"
+        "        const bool stocklessTrainHistory = workerThread.stocklessHistoryActive\n"
+        "                                        && workerThread.stocklessHistoryWeight > 0;\n"
         "        const Bitboard stocklessEnemyAttacks =\n"
         "          stocklessTrainHistory\n" "            ? Stockless::attacks_for(pos, ~pos.side_to_move())\n" "                | Attacks::attacks_bb(KING, pos.square<KING>(~pos.side_to_move()))\n" "            : 0;\n"
         "        if (stocklessTrainHistory)\n"
