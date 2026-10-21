@@ -81,6 +81,8 @@ def materialize(out: Path) -> None:
         "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n",
         "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n"
         "    Stockless::SearchSettings stocklessSearchSettings{};\n"
+        "    bool stocklessHistoryActive = false;\n"
+        "    int stocklessHistoryWeight = 0;\n"
         "    Stockless::ThreatQuietHistory threatQuietHistory;\n",
     )
 
@@ -129,7 +131,7 @@ def materialize(out: Path) -> None:
         "    [[maybe_unused]] int stocklessHistoryWeight = 0;\n"
         "    [[maybe_unused]] Bitboard stocklessEnemyAttacks = 0;\n"
         "    if constexpr (Type == QUIETS)\n"
-        "        if (threatQuietHistory && Stockless::threat_history_enabled())\n"
+        "        if (threatQuietHistory)\n"
         "        {\n"
         "            stocklessHistoryWeight = Stockless::threat_history_weight();\n"
         "            if (stocklessHistoryWeight)\n"
@@ -159,6 +161,8 @@ def materialize(out: Path) -> None:
         "void Search::Worker::start_searching() {\n\n    accumulatorStack.reset();\n",
         "void Search::Worker::start_searching() {\n\n"
         "    stocklessSearchSettings = Stockless::search_settings();\n"
+        "    stocklessHistoryActive = stocklessSearchSettings.hybrid && Stockless::threat_history_enabled();\n"
+        "    stocklessHistoryWeight = stocklessHistoryActive ? Stockless::threat_history_weight() : 0;\n"
         "    accumulatorStack.reset();\n",
     )
 
@@ -178,7 +182,7 @@ def materialize(out: Path) -> None:
 """ + node_anchor.replace(
         "                  &sharedHistory, ss->ply);\n",
         "                  &sharedHistory, ss->ply,\n"
-        "                  Stockless::threat_history_enabled() ? &threatQuietHistory : nullptr);\n",
+        "                  stocklessHistoryActive ? &threatQuietHistory : nullptr);\n",
     )
     replace_once(search_cpp, node_anchor, node_patch)
 
@@ -263,8 +267,8 @@ def materialize(out: Path) -> None:
         search_cpp,
         "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n",
         "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n"
-        "        const bool stocklessTrainHistory = Stockless::threat_history_enabled()\n"
-        "                                        && Stockless::threat_history_weight() > 0;\n"
+        "        const bool stocklessTrainHistory = workerThread.stocklessHistoryActive\n"
+        "                                        && workerThread.stocklessHistoryWeight > 0;\n"
         "        const Bitboard stocklessEnemyAttacks =\n"
         "          stocklessTrainHistory\n" "            ? Stockless::attacks_for(pos, ~pos.side_to_move())\n" "                | Attacks::attacks_bb(KING, pos.square<KING>(~pos.side_to_move()))\n" "            : 0;\n"
         "        if (stocklessTrainHistory)\n"

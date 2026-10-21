@@ -11,6 +11,35 @@ Base: `Stockless_v0.8.9` (`d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f`).
 
 ## Scoped candidate
 
+### Candidate A — side occupancy reuse (completed first CI)
+
+The initial (side-occupancy reuse only) change was checked in GitHub Actions:
+- [Build matrix](https://github.com/gaong5247-cmd/Stockless/actions/runs/39604047066): Windows, Linux, Android arm64, Android armv7 all passed.
+- [Six-run deterministic bench](https://github.com/gaong5247-cmd/Stockless/actions/runs/39604047142): same 1,078,618 depth-12 nodes; median NPS 877,282 -> 877,639 (**+0.04%**, noise-sized).
+- [Independent strength gates](https://github.com/gaong5247-cmd/Stockless/actions/runs/39604046794): 512 games versus frozen main: 96 W / 322 D / 94 L = 50.195%. 256 games vs official SF19: 41 W / 159 D / 56 L = 47.070%. Neither comparison establishes an Elo gain.
+**Conclusion: occupancy reuse is code cleanup, not demonstrated speedup.**
+
+### Candidate B — per-go UCI option snapshots (current unverified experiment)
+
+Previously, each main search node executed \`Stockless::search_settings()\`, loading multiple relaxed atomics to get unchanged option values. The materializer now inserts a \`SearchSettings\` member into each Stockfish search Worker, writes it once upon entry to \`Worker::start_searching()\` on each UCI \`go\`, and reads only that local immutable snapshot in the recursive hot path. Both main and helper workers refresh it. Correctness assumption remains unchanged: UCI \`setoption\` happens *between* searches, not during \`go\`. The automated UCI smoke test now performs multiple \`go\` commands after changing hybrid, threats, aggression and Threads options within one engine process.
+
+**Build/bench and strength evidence for Candidate B is still required.** Do not mistake Candidate A's passing CI for Candidate B's validation.
+
+### Independent pre-existing feature ablation (PR #25; different trees!)
+
+On 2026-10-20, [PR #25](https://github.com/gaong5247-cmd/Stockless/pull/25) used the **same executable**, AVX2, 1 thread and four fixed-depth-12 repetitions:
+
+| Mode | Median NPS | Depth-12 nodes | Difference vs full hybrid |
+| --- | ---: | ---: | ---: |
+| Hybrid ON, Threats ON, aggression 145 | 731,115 | 2,083,677 | reference |
+| Hybrid ON, Threats OFF | 742,502 | 1,772,726 | +1.6% NPS |
+| Hybrid ON, aggression 112 | 739,585 | 1,916,624 | +1.2% NPS |
+| Hybrid OFF | 848,729 | 981,072 | +16.1% NPS |
+
+The **search trees are different**, so neither the NPS ratio nor the lower node count is a semantics-preserving speedup. Quick 256-game color-paired matches produced NoThreats 51.172% vs FullHybrid; HybridOff 49.609% vs FullHybrid. Both are too small to establish a superiority claim. As a result, neither threats nor hybrid is removed from the default.
+
+[Underlying ablation run](https://github.com/gaong5247-cmd/Stockless/actions/runs/39388250650).
+
 Reuse already-selected side occupancy bitboards in `compute_threat_signal()` rather than repeating `Position::pieces(color)` lookups. No changes to feature definitions, arithmetic order, output bounds, activation gates, search heuristics, NNUE files, UCI defaults, or platform dispatch. This is a tiny candidate and compilers may already eliminate the redundant loads: **NPS improvement is not yet demonstrated**.
 
 ## Validation (mandatory before merge)
