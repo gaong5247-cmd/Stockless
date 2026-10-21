@@ -12,15 +12,15 @@
 
 **Latest stable release:** [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9) (universal UCI builds, conservative search refactor and corrected arena defaults). **Earlier research archives:** [v0.8–v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases); [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1) remains a separate opt-in research pre-release. Release numbering does not establish a verified playing-strength gain.
 
-**Implementation version: v0.8.9.** The UCI handshake reports `id name Stockless v0.8.9` (no upstream development-date suffix). Threat History and Overdrive remain **OFF** by default; preliminary paired matches do not establish an Elo advantage over Stockfish 19.
+**Experimental lean branch based on v0.8.9:** this branch removes the unproven ThreatHistory subsystem, its two UCI options and obsolete tuning scripts. It is **not** the published v0.8.9 release. The version string is intentionally unchanged for exact benchmark comparison; use the stable release link above for production. Overdrive remains OFF by default. No Elo improvement is claimed.
 
 **Universal release v0.8.9:** [platform downloads, installation, UCI defaults and verification results](docs/RELEASE_v0.8.9.md). The older [v0.7.1 release guide](docs/UNIVERSAL_RELEASE.md) remains archived.
 
 **Optimization candidate (not yet strength-verified):** [per-node policy snapshots, CPU-native PGO builds and rigorous bench gating](docs/OPTIMIZATION_20261018.md). Search fast-path changes are in the source; no Elo gain is claimed.
 
-**Experimental research:** [v0.7 threat-conditioned quiet history design, switches and reproducible A/B tests](docs/EXPERIMENT_07.md). This feature is OFF by default; no Elo gain is claimed.
+**Historical research (stable-tag archive):** [v0.7 threat-conditioned history](https://github.com/gaong5247-cmd/Stockless/blob/Stockless_v0.8.9/docs/EXPERIMENT_07.md) is retained as an audit record; the implementation is absent from this lean branch.
 
-**Automated tuning:** [ON/OFF tournament, best-weight selection, Stockfish validation and conditional defaults](docs/TUNING_PIPELINE_07.md). [Completed v0.7 tournament report](docs/HISTORY_TUNING_REPORT.md).
+**Historical tournament:** [v0.7 history tournament report](docs/HISTORY_TUNING_REPORT.md) documented a failed 800-game independent holdout. The old ON/OFF tuner and promotion workflow have been removed in this lean experiment.
 
 ## Architecture
 
@@ -93,8 +93,6 @@ On Windows, use `./scripts/build-windows.ps1` in PowerShell. The materialization
 | `StocklessThreats` | true | Enable board-derived threat signals |
 | `StocklessOverdrive` | false | Opt-in selective tactical extensions |
 | `StocklessMobile` | true on Android; false elsewhere | Lower-cost search profile |
-| `StocklessThreatHistory` | false | Experimental threat-aware history |
-| `StocklessHistoryWeight` | 100 | Used only when history is ON (0–200) |
 
 Example:
 
@@ -157,7 +155,7 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 
 **최적화 후보(실전 성능 미검증):** [탐색 노드당 설정 스냅샷, CPU별 PGO 빌드, 벤치마크 기준](docs/OPTIMIZATION_20261018.md). Elo 상승을 검증한 단계는 아닙니다.
 
-**Universal 배포 v0.8.9:** [Windows·Linux·Android 설치, UCI 설정 및 대국 결과](docs/RELEASE_v0.8.9.md). 기본 공격성 145, Overdrive OFF, Threat History OFF를 유지합니다. 이전 [v0.7.1 안내](docs/UNIVERSAL_RELEASE.md)도 보존합니다.
+**Universal 배포 v0.8.9:** [Windows·Linux·Android 설치, UCI 설정 및 대국 결과](docs/RELEASE_v0.8.9.md). 공개된 안정판은 History OFF이며, 이 실험 브랜치는 History 자체를 제거했습니다. 이전 [v0.7.1 안내](docs/UNIVERSAL_RELEASE.md)도 보존합니다.
 
 **실험 연구:** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](docs/EXPERIMENT_07.md). 기본값은 OFF이며 Elo 상승이 검증된 것은 아닙니다.
 
@@ -210,8 +208,6 @@ Windows에서는 PowerShell에서 `./scripts/build-windows.ps1`을 사용할 수
 | `StocklessThreats` | true | 위협 신호 사용 |
 | `StocklessOverdrive` | false | 선택적 전술 탐색 강화 |
 | `StocklessMobile` | Android에서 true | 저비용 모바일 탐색 |
-| `StocklessThreatHistory` | false | 위협 History 기본 OFF |
-| `StocklessHistoryWeight` | 100 | History ON에서만 영향(0~200) |
 
 `StocklessHybrid=false`를 설정하면 Stockless 탐색 조정을 비활성화해 Stockfish 기반 탐색과 비교할 수 있습니다.
 
