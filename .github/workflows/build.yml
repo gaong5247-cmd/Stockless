@@ -19,11 +19,6 @@ jobs:
         run: python tools/materialize.py
       - name: Verify arena defaults and overrides
         run: python tests/test_cutechess_defaults.py
-      - name: Verify threat-history invariants
-        shell: bash
-        run: |
-          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/threat_history_test.cpp -o threat_history_test
-          ./threat_history_test
       - name: Verify v0.7 search policy decision equivalence
         shell: bash
         run: |
@@ -42,14 +37,14 @@ jobs:
           grep -q 'option name StocklessHybrid type check default true' uci.txt
           grep -q 'option name StocklessAggression type spin default 145' uci.txt
           grep -q 'option name StocklessThreats type check default true' uci.txt
-          grep -q 'option name StocklessThreatHistory type check' uci.txt
-          grep -q 'option name StocklessHistoryWeight type spin default 100' uci.txt
+          ! grep -q 'option name StocklessThreatHistory ' uci.txt
+          ! grep -q 'option name StocklessHistoryWeight ' uci.txt
           grep -q 'option name StocklessOverdrive type check default false' uci.txt
           grep -q 'option name StocklessMobile' uci.txt
           grep -q 'uciok' uci.txt
           grep -q 'readyok' uci.txt
-      - name: Threat-history ON/OFF real-search smoke
-        run: python tests/uci_history_smoke.py build/stockless-src/src/stockless
+      - name: Lean UCI multi-search and thread smoke
+        run: python tests/uci_lean_smoke.py build/stockless-src/src/stockless
       - name: Package Linux artifact
         shell: bash
         run: |
@@ -98,7 +93,7 @@ jobs:
           $expectedIdentity = "id name Stockless $($Matches[1])"
           if ($uciText -notcontains $expectedIdentity) { throw "Incorrect UCI identity; expected $expectedIdentity. Actual: $uciText" }
           if ($uciText -notcontains "uciok" -or $uciText -notcontains "readyok") { throw "UCI startup failed" }
-          if (-not ($uciText -match "option name StocklessThreatHistory type check default false")) { throw "Incorrect history default" }
+          if ($uciText -match "option name StocklessThreatHistory " -or $uciText -match "option name StocklessHistoryWeight ") { throw "Retired ThreatHistory options found" }
       - name: Package Windows artifact
         shell: pwsh
         run: |

@@ -54,7 +54,7 @@ jobs:
           $text = Get-Content ".\dist\uci-smoke.txt" -Raw
           if ($text -notmatch "(?m)^id name Stockless v0[.]7[.]1\r?$") { throw "wrong engine id" }
           if ($text -notmatch "option name StocklessAggression type spin default 145") { throw "wrong aggression default" }
-          if ($text -notmatch "option name StocklessThreatHistory type check default false") { throw "wrong history default" }
+          if ($text -match "option name StocklessThreatHistory " -or $text -match "option name StocklessHistoryWeight ") { throw "retired history options must be absent in lean branch" }
           if ($text -notmatch "uciok") { throw "uci failed" }
           if ($text -notmatch "readyok") { throw "isready failed" }
 
@@ -77,8 +77,7 @@ jobs:
           StocklessOverdrive = false
           StocklessMobile = false
 
-          StocklessThreatHistory = false
-          StocklessHistoryWeight = 100
+          # Lean variant removes the experimental ThreatHistory options entirely.
 
           The v0.7 ON/OFF tournament did not prove a gain from enabling history,
           so it remains OFF by default. StocklessOverdrive is also OFF.
