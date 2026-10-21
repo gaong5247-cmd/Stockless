@@ -9,6 +9,8 @@
 
 using namespace Stockfish::Stockless;
 
+static_assert(sizeof(SearchPolicy) == 3 * sizeof(int), "compact policy must hold exactly the three search outputs");
+
 // Independent frozen v0.7 formula. Changes to policy must not silently
 // change playing decisions when moving atomic reads outside the move loop.
 SearchPolicy reference_policy(const SearchInputs& in, const SearchSettings& settings) {
@@ -33,12 +35,12 @@ SearchPolicy reference_policy(const SearchInputs& in, const SearchSettings& sett
         && in.threat.tacticalVolatility < 144)
         pressure -= 48;
 
-    out.pressure = std::clamp(pressure, 0, 256);
-    out.danger = std::clamp(danger, 0, 256);
-    out.volatility = std::clamp(volatility, 0, 256);
+    const int boundedPressure = std::clamp(pressure, 0, 256);
+    const int boundedDanger = std::clamp(danger, 0, 256);
+    const int boundedVolatility = std::clamp(volatility, 0, 256);
 
     const int tactical =
-      std::clamp((3 * out.pressure + 2 * out.danger + 2 * out.volatility) / 7, 0, 256);
+      std::clamp((3 * boundedPressure + 2 * boundedDanger + 2 * boundedVolatility) / 7, 0, 256);
     const int cap = settings.mobile ? 320 : 640;
     int buyback = tactical * settings.aggression * cap / (256 * 100);
     if (in.cutNode && !in.ttPv && !in.capture && !in.givesCheck && tactical < 152)
@@ -47,9 +49,9 @@ SearchPolicy reference_policy(const SearchInputs& in, const SearchSettings& sett
         buyback += 40;
 
     if (settings.overdrive && !settings.mobile) {
-        const bool forcingCheck = in.givesCheck && out.pressure >= 176;
-        const bool kingEmergency = out.danger >= 224;
-        const bool forcingCapture = in.capture && out.pressure >= 216 && tactical >= 192;
+        const bool forcingCheck = in.givesCheck && boundedPressure >= 176;
+        const bool kingEmergency = boundedDanger >= 224;
+        const bool forcingCapture = in.capture && boundedPressure >= 216 && tactical >= 192;
         if (forcingCheck) buyback += 160;
         else if (forcingCapture || kingEmergency) buyback += 96;
         if ((forcingCheck || forcingCapture || kingEmergency) && tactical >= 192)
@@ -66,9 +68,6 @@ SearchPolicy reference_policy(const SearchInputs& in, const SearchSettings& sett
 }
 
 void same(const SearchPolicy& a, const SearchPolicy& b) {
-    assert(a.pressure == b.pressure);
-    assert(a.danger == b.danger);
-    assert(a.volatility == b.volatility);
     assert(a.lmrAdjustment == b.lmrAdjustment);
     assert(a.pruningDepthBoost == b.pruningDepthBoost);
     assert(a.reSearchDepthBonus == b.reSearchDepthBonus);
