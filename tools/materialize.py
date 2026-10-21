@@ -63,9 +63,31 @@ def materialize(out: Path) -> None:
     shutil.copytree(OVERLAY, target_overlay)
 
     search_cpp = out / "src" / "search.cpp"
+    search_h = out / "src" / "search.h"
     engine_cpp = out / "src" / "engine.cpp"
     misc_cpp = out / "src" / "misc.cpp"
     makefile = out / "src" / "Makefile"
+
+    # Import only the option snapshot type into Search::Worker.
+    # This is Worker-private: each thread refreshes on the next UCI 'go'.
+    replace_once(
+        search_h,
+        '#include "history.h"\n',
+        '#include "history.h"\n#include "stockless_core/config.h"\n',
+    )
+    replace_once(
+        search_h,
+        "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n",
+        "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n"
+        "    Stockless::SearchSettings stocklessSearchSettings{};\n",
+    )
+    replace_once(
+        search_cpp,
+        "void Search::Worker::start_searching() {\n\n    accumulatorStack.reset();\n",
+        "void Search::Worker::start_searching() {\n\n"
+        "    stocklessSearchSettings = Stockless::search_settings();\n"
+        "    accumulatorStack.reset();\n",
+    )
 
     replace_once(
         search_cpp,
@@ -76,8 +98,8 @@ def materialize(out: Path) -> None:
     node_anchor = """    MovePicker mp(pos, ttData.move, depth, &mainHistory, &lowPlyHistory, &captureHistory, contHist,
                   &sharedHistory, ss->ply);
 """
-    node_patch = """    // No atomic UCI option reloads in the hot per-move policy loop.
-    const auto stocklessSettings = Stockless::search_settings();
+    node_patch = """    // Each owning Worker captures UCI settings once per 'go', not per node.
+    const auto& stocklessSettings = stocklessSearchSettings;
     // Preserve the exact pre-move attack-map snapshot. Delaying this
     // read to after earlier searches changed depth-limited node counts.
     const auto stocklessThreat =
