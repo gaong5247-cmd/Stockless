@@ -74,12 +74,13 @@ def materialize(out: Path) -> None:
     replace_once(
         search_h,
         '#include "history.h"\n',
-        '#include "history.h"\n#include "stockless_core/threat_history.h"\n',
+        '#include "history.h"\n#include "stockless_core/config.h"\n#include "stockless_core/threat_history.h"\n',
     )
     replace_once(
         search_h,
         "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n",
         "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n"
+        "    Stockless::SearchSettings stocklessSearchSettings{};\n"
         "    Stockless::ThreatQuietHistory threatQuietHistory;\n",
     )
 
@@ -150,11 +151,22 @@ def materialize(out: Path) -> None:
         '#include "search.h"\n#include "stockless_core/search_policy.h"\n#include "stockless_core/threat_signal.h"\n',
     )
 
+    # Each Worker enters start_searching once per UCI go (including helpers).
+    # Snapshot options there to eliminate relaxed atomic reads at each node.
+    # setoption changes become visible at the next go, never halfway through.
+    replace_once(
+        search_cpp,
+        "void Search::Worker::start_searching() {\n\n    accumulatorStack.reset();\n",
+        "void Search::Worker::start_searching() {\n\n"
+        "    stocklessSearchSettings = Stockless::search_settings();\n"
+        "    accumulatorStack.reset();\n",
+    )
+
     node_anchor = """    MovePicker mp(pos, ttData.move, depth, &mainHistory, &lowPlyHistory, &captureHistory, contHist,
                   &sharedHistory, ss->ply);
 """
-    node_patch = """    // No atomic UCI option reloads in the hot per-move policy loop.
-    const auto stocklessSettings = Stockless::search_settings();
+    node_patch = """    // Reuse the per-go, per-Worker option snapshot in every search node.
+    const auto& stocklessSettings = stocklessSearchSettings;
     // Preserve the exact pre-move attack-map snapshot. Delaying this
     // read to after earlier searches changed depth-limited node counts.
     const auto stocklessThreat =
