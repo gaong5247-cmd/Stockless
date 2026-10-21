@@ -25,10 +25,10 @@ struct SearchInputs {
     ThreatSignal threat;
 };
 
+// Only these three outputs reach the Stockfish search. The raw pressure,
+// danger and volatility values are scratch arithmetic, not search results.
+// Returning 12 instead of 24 bytes avoids an indirect result on SysV x64.
 struct SearchPolicy {
-    int pressure = 0;
-    int danger = 0;
-    int volatility = 0;
     int lmrAdjustment = 0;
     int pruningDepthBoost = 0;
     int reSearchDepthBonus = 0;
@@ -62,13 +62,13 @@ inline SearchPolicy make_search_policy(const SearchInputs& in,
         && in.threat.tacticalVolatility < 144)
         pressure -= 48;
 
-    out.pressure   = std::clamp(pressure, 0, 256);
-    out.danger     = std::clamp(danger, 0, 256);
-    out.volatility = std::clamp(volatility, 0, 256);
+    const int boundedPressure = std::clamp(pressure, 0, 256);
+    const int boundedDanger = std::clamp(danger, 0, 256);
+    const int boundedVolatility = std::clamp(volatility, 0, 256);
 
     const int aggression = settings.aggression;
     const int tactical =
-      std::clamp((3 * out.pressure + 2 * out.danger + 2 * out.volatility) / 7, 0, 256);
+      std::clamp((3 * boundedPressure + 2 * boundedDanger + 2 * boundedVolatility) / 7, 0, 256);
 
     // Base hybrid: strong enough to matter, but still much cheaper than the
     // broad v0.4 Overdrive experiment.
@@ -86,9 +86,9 @@ inline SearchPolicy make_search_policy(const SearchInputs& in,
     // the expensive treatment.
     if (settings.overdrive && !settings.mobile)
     {
-        const bool forcingCheck = in.givesCheck && out.pressure >= 176;
-        const bool kingEmergency = out.danger >= 224;
-        const bool forcingCapture = in.capture && out.pressure >= 216 && tactical >= 192;
+        const bool forcingCheck = in.givesCheck && boundedPressure >= 176;
+        const bool kingEmergency = boundedDanger >= 224;
+        const bool forcingCapture = in.capture && boundedPressure >= 216 && tactical >= 192;
 
         if (forcingCheck)
             buyback += 160;
