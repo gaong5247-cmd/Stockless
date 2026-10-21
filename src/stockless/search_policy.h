@@ -7,15 +7,15 @@
 
 namespace Stockfish::Stockless {
 
-// Stable per-node inputs. Do not put window or nextCutoffCount here:
-// alpha and the next ply's cutoff count may change between searched moves.
+// Stable per-node inputs. Do not cache window, nextCutoffCount or ttPv:
+// alpha and the next ply's cutoff count may change between moves;
+// a singular search can reuse the same Stack and overwrite ss->ttPv.
 struct SearchNodeInputs {
     int depth;
     int correctionSignal;
 
     bool improving;
     bool inCheck;
-    bool ttPv;
     bool pvNode;
     bool cutNode;
 
@@ -63,7 +63,6 @@ struct PreparedSearchPolicy {
     int depth = 0;
 
     bool hybrid = false;
-    bool ttPv = false;
     bool pvNode = false;
     bool cutNode = false;
     bool desktopOverdrive = false;
@@ -78,8 +77,7 @@ inline PreparedSearchPolicy prepare_search_policy(const SearchNodeInputs& in,
 
     out.hybrid = true;
     out.depth = in.depth;
-    out.pressureBase =
-      in.threat.attackPressure + (in.ttPv ? 18 : 0) + (in.pvNode ? 14 : 0);
+    out.pressureBase = in.threat.attackPressure + (in.pvNode ? 14 : 0);
     out.danger = std::clamp(in.threat.kingDanger + (in.inCheck ? 108 : 0), 0, 256);
     out.volatilityBase = in.threat.tacticalVolatility + (3 * in.correctionSignal) / 5;
     if (!in.improving)
@@ -91,19 +89,20 @@ inline PreparedSearchPolicy prepare_search_policy(const SearchNodeInputs& in,
     // Preserve v0.8.9 semantics, including the mobile Overdrive cap behavior.
     // Changing it is a separate independent experiment (PR #26).
     out.maxBuyback = out.cap + (settings.overdrive ? 192 : 0);
-    out.ttPv = in.ttPv;
     out.pvNode = in.pvNode;
     out.cutNode = in.cutNode;
     out.desktopOverdrive = settings.overdrive && !settings.mobile;
     return out;
 }
 
-// Values that change after a searched move are deliberately passed here.
-// In particular, do NOT cache (beta-alpha) or (ss+1)->cutoffCnt per node.
+// Values that can change after a searched move are deliberately passed here.
+// Do NOT cache (beta-alpha), (ss+1)->cutoffCnt, or ss->ttPv per node:
+// Stockfish's same-ply singular verification can overwrite ttPv.
 inline SearchPolicy make_prepared_move_policy(const PreparedSearchPolicy& base,
                                               int moveCount,
                                               int window,
                                               int nextCutoffCount,
+                                              bool ttPv,
                                               bool capture,
                                               bool givesCheck) noexcept {
     SearchPolicy out{};
@@ -114,6 +113,7 @@ inline SearchPolicy make_prepared_move_policy(const PreparedSearchPolicy& base,
     int pressure = base.pressureBase;
     pressure += givesCheck ? 84 : 0;
     pressure += capture ? 30 : 0;
+    pressure += ttPv ? 18 : 0;
 
     if (!capture && !givesCheck && moveCount > 8 && base.threatVolatility < 144)
         pressure -= 48;
@@ -127,10 +127,10 @@ inline SearchPolicy make_prepared_move_policy(const PreparedSearchPolicy& base,
 
     int buyback = tactical * base.aggression * base.cap / (256 * 100);
 
-    if (base.cutNode && !base.ttPv && !capture && !givesCheck && tactical < 152)
+    if (base.cutNode && !ttPv && !capture && !givesCheck && tactical < 152)
         buyback = std::max(0, buyback - 128);
 
-    if (window <= 32 && (base.pvNode || base.ttPv))
+    if (window <= 32 && (base.pvNode || ttPv))
         buyback += 40;
 
     if (base.desktopOverdrive)
@@ -165,11 +165,11 @@ inline SearchPolicy make_prepared_move_policy(const PreparedSearchPolicy& base,
 inline SearchPolicy make_search_policy(const SearchInputs& in,
                                        const SearchSettings& settings) noexcept {
     const auto prepared = prepare_search_policy(
-      {in.depth, in.correctionSignal, in.improving, in.inCheck, in.ttPv,
+      {in.depth, in.correctionSignal, in.improving, in.inCheck,
        in.pvNode, in.cutNode, in.threat},
       settings);
     return make_prepared_move_policy(prepared, in.moveCount, in.window,
-                                     in.nextCutoffCount, in.capture, in.givesCheck);
+                                     in.nextCutoffCount, in.ttPv, in.capture, in.givesCheck);
 }
 
 } // namespace Stockfish::Stockless
