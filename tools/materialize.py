@@ -187,7 +187,6 @@ def materialize(out: Path) -> None:
         stocklessCorrectionSignal,
         improving,
         ss->inCheck,
-        ss->ttPv,
         PvNode,
         cutNode,
         stocklessThreat,
@@ -195,7 +194,7 @@ def materialize(out: Path) -> None:
     const auto stocklessPolicyForMove = [&]() noexcept {
         return Stockless::make_prepared_move_policy(
           stocklessPolicyBase, moveCount, int(beta - alpha),
-          int((ss + 1)->cutoffCnt), capture, givesCheck);
+          int((ss + 1)->cutoffCnt), ss->ttPv, capture, givesCheck);
     };
 """
     replace_once(search_cpp, policy_factory_anchor, policy_factory_patch)
