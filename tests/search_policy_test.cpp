@@ -110,15 +110,15 @@ int main() {
         same(actual, reference_policy(in, settings));
 
         // A single prepared node is reused for multiple *different* moves.
-        // alpha/window and the next-ply cutoff count may mutate after one
+        // alpha/window, next-ply cutoff count and ss->ttPv may mutate after one
         // of those moves is searched: do not cache them in the node.
         const auto prepared = prepare_search_policy(
             {in.depth, in.correctionSignal, in.improving, in.inCheck,
-             in.ttPv, in.pvNode, in.cutNode, in.threat}, settings);
+             in.pvNode, in.cutNode, in.threat}, settings);
         const auto preparedMove = [&](const SearchInputs& m) {
             return make_prepared_move_policy(
                 prepared, m.moveCount, m.window, m.nextCutoffCount,
-                m.capture, m.givesCheck);
+                m.ttPv, m.capture, m.givesCheck);
         };
         same(preparedMove(in), reference_policy(in, settings));
 
@@ -128,6 +128,9 @@ int main() {
         secondMove.nextCutoffCount = (in.nextCutoffCount + 5) % 8;
         secondMove.capture = !in.capture;
         secondMove.givesCheck = !in.givesCheck;
+        // Regression: singular verification may mutate ttPv in the same
+        // Stack between two move policy evaluations.
+        secondMove.ttPv = !in.ttPv;
         same(preparedMove(secondMove), reference_policy(secondMove, settings));
 
         assert(actual.lmrAdjustment <= 0);
