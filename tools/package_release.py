@@ -89,7 +89,7 @@ def main() -> None:
         "Android: extract the binary and import/select it through a chess GUI supporting external UCI engines, e.g. DroidFish.\n"
         "This is a native UCI engine, NOT an Android APK.\n\n"
         "The executable includes the Stockfish NNUE networks used by the pinned build.\n"
-        "Default: Hybrid true; aggression 145; Threats true; Overdrive false; ThreatHistory false.\n"
+        "Default: Hybrid true; aggression 145; Threats true; Overdrive false.\n"
         "No Elo increase relative to v0.7 is established merely by the new version.\n"
         f"Source commit: {args.source_sha}\n"
         f"Binary SHA-256: {manifest['binary_sha256']}\n"
