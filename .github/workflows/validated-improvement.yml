@@ -1,0 +1,250 @@
+name: Stockless v0.9.0 independent strength validation
+run-name: "v0.9.0 fixed-baseline validation · ${{ github.sha }}"
+
+on:
+  push:
+    branches: [improvement/20261025-validated-search]
+    paths: [arena/VALIDATE_20261025]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stockless-validated-improvement-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install chess==1.11.2
+      - name: Verify regression checks and materialize candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_paired_match_gate.py -v
+          python tests/test_cutechess_defaults.py
+          python tools/materialize.py
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/search_policy_test.cpp -o policy-test
+          ./policy-test
+          c++ -std=c++17 -O2 -ffunction-sections -fdata-sections -Wl,--gc-sections \
+            -Ibuild/stockless-src/src tests/threat_signal_test.cpp \
+            build/stockless-src/src/position.cpp build/stockless-src/src/attacks.cpp \
+            build/stockless-src/src/bitboard.cpp -o threat-test
+          ./threat-test
+      - name: Build candidate and frozen v0.8.9 with identical compiler and ISA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation-build
+          make -C build/stockless-src/src -j4 build ARCH=x86-64-avx2
+          cp build/stockless-src/src/stockless validation-build/candidate
+          python tests/uci_lean_smoke.py validation-build/candidate
+          BASE=d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f
+          git worktree add --detach ../stockless-validation-base "$BASE"
+          git -C ../stockless-validation-base submodule update --init --recursive
+          cp build/stockless-src/src/*.nnue ../stockless-validation-base/upstream/stockfish/src/
+          (
+            cd ../stockless-validation-base
+            python tools/materialize.py
+            make -C build/stockless-src/src -j4 build ARCH=x86-64-avx2
+          )
+          cp ../stockless-validation-base/build/stockless-src/src/stockless validation-build/baseline
+          printf 'uci\nisready\nquit\n' | validation-build/baseline > validation-build/baseline-uci.txt
+          grep -Fx 'id name Stockless v0.8.9' validation-build/baseline-uci.txt
+          grep -Fx readyok validation-build/baseline-uci.txt
+          printf 'uci\nisready\nquit\n' | validation-build/candidate > validation-build/candidate-uci.txt
+          grep -Fx 'id name Stockless v0.9.0' validation-build/candidate-uci.txt
+          git rev-parse HEAD > validation-build/candidate-sha.txt
+          g++ --version > validation-build/compiler.txt
+          lscpu > validation-build/build-cpu.txt
+          sha256sum validation-build/candidate validation-build/baseline > validation-build/binary-sha256.txt
+      - name: Freeze disjoint screening and confirmation openings
+        run: python tools/run_paired_validation.py prepare-book validation-build/openings.epd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-build
+          path: validation-build/
+          if-no-files-found: error
+
+  screen:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      eligible: ${{ steps.decision.outputs.eligible }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install chess==1.11.2
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-build
+          path: validation-build
+      - name: Install pinned CuteChess and restore executable permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage validation-build/candidate validation-build/baseline
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          echo "CUTECHESS=$PWD/squashfs-root/usr/bin/cutechess-cli" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - name: Fixed 512-game screen (never sufficient to publish)
+        run: |
+          test "$(cat validation-build/candidate-sha.txt)" = "$GITHUB_SHA"
+          sha256sum -c validation-build/binary-sha256.txt
+          python tools/run_paired_validation.py run --stage screen --shard 0 \
+            --candidate validation-build/candidate --baseline validation-build/baseline \
+            --candidate-sha "$GITHUB_SHA" --cutechess "$CUTECHESS" \
+            --book validation-build/openings.epd --output results/screen-0
+          python tools/run_paired_validation.py plan --candidate-sha "$GITHUB_SHA" \
+            --mode exploratory --output screen-plan.json
+          python tools/paired_match_gate.py --manifest screen-plan.json --results results --output screen-report
+      - name: Continue only with valid, non-losing screening evidence
+        id: decision
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads(Path('screen-report/report.json').read_text())
+          stage = report['stages'][0]
+          eligible = report['valid'] and stage['statistics']['games'] == 512 and stage['statistics']['score'] >= 0.5
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"eligible={'true' if eligible else 'false'}\n")
+          print(f'Continue to fixed confirmation: {eligible}')
+          PY
+          cat screen-report/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-screen
+          path: |
+            results/
+            screen-plan.json
+            screen-report/
+          if-no-files-found: error
+
+  confirmation:
+    needs: [build, screen]
+    if: needs.screen.outputs.eligible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        include:
+          - {stage: short, shard: 0}
+          - {stage: short, shard: 1}
+          - {stage: short, shard: 2}
+          - {stage: short, shard: 3}
+          - {stage: short, shard: 4}
+          - {stage: short, shard: 5}
+          - {stage: short, shard: 6}
+          - {stage: short, shard: 7}
+          - {stage: long, shard: 0}
+          - {stage: long, shard: 1}
+          - {stage: long, shard: 2}
+          - {stage: long, shard: 3}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install chess==1.11.2
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-build
+          path: validation-build
+      - name: Install pinned CuteChess
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage validation-build/candidate validation-build/baseline
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          echo "CUTECHESS=$PWD/squashfs-root/usr/bin/cutechess-cli" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - name: Play all predeclared games on untouched confirmation openings
+        run: |
+          test "$(cat validation-build/candidate-sha.txt)" = "$GITHUB_SHA"
+          sha256sum -c validation-build/binary-sha256.txt
+          python tools/run_paired_validation.py run \
+            --stage '${{ matrix.stage }}' --shard '${{ matrix.shard }}' \
+            --candidate validation-build/candidate --baseline validation-build/baseline \
+            --candidate-sha "$GITHUB_SHA" --cutechess "$CUTECHESS" \
+            --book validation-build/openings.epd --output 'results/${{ matrix.stage }}-${{ matrix.shard }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-confirm-${{ matrix.stage }}-${{ matrix.shard }}
+          path: results/
+          if-no-files-found: error
+
+  gate:
+    needs: [build, screen, confirmation]
+    if: always() && needs.screen.outputs.eligible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      approved: ${{ steps.decision.outputs.approved }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install chess==1.11.2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: validation-confirm-*
+          path: results
+          merge-multiple: true
+      - name: Check completeness, pairing, faults and both independent confidence intervals
+        id: decision
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/run_paired_validation.py plan --candidate-sha "$GITHUB_SHA" \
+            --mode confirmation --output confirmation-plan.json
+          python tools/paired_match_gate.py --manifest confirmation-plan.json --results results --output validation-report
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads(Path('validation-report/report.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"approved={'true' if report['approved'] else 'false'}\n")
+          print(json.dumps(report, indent=2))
+          PY
+          cat validation-report/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-evidence
+          path: |
+            confirmation-plan.json
+            validation-report/
+            results/
+          if-no-files-found: error
+
+  release:
+    needs: gate
+    if: needs.gate.outputs.approved == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/universal-release.yml
+    with:
+      publish_validated: true
+    secrets: inherit

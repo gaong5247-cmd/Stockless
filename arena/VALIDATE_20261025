@@ -1,0 +1,5 @@
+Candidate: lean history removal, live-depth prepared policy, corrected pin direction, mobile Overdrive fix.
+Baseline: d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f (Stockless_v0.8.9).
+Screen: 512 games at 1+0.01. No promotion on screening results.
+Confirmation: fixed 4096 games at 2+0.02 and 1024 games at 5+0.05, disjoint openings.
+Publish only if both paired 95% confidence intervals are positive and all evidence/build checks pass.

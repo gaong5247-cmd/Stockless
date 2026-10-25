@@ -1,4 +1,0 @@
-profile=full
-# Full tournament: 160 games per ON weight, 800 confirmation, 600 each vs Stockfish.
-# A longer-TC 400-game test is run for promising, independently confirmed candidates.
-# Change to profile=smoke to run only the small integration test.

@@ -26,10 +26,11 @@ if ($LASTEXITCODE -ne 0) { throw "Stockless make $Target failed with $LASTEXITCO
 Write-Host ""
 Write-Host "Build complete."
 Write-Host "Binary is under: $EngineSrc"
-Write-Host "UCI identity: Stockless v0.7.2-dev.20261018.1"
-Write-Host "Hybrid search is ON by default; Overdrive and ThreatHistory are OFF."
+$Config = Get-Content (Join-Path $Root "src/stockless/config.h") -Raw
+if ($Config -notmatch 'Version = "([^"]+)"') { throw "Missing engine version" }
+Write-Host "UCI identity: Stockless $($Matches[1])"
+Write-Host "Hybrid search is ON by default; Overdrive is OFF."
 Write-Host "Enable in UCI with: setoption name StocklessHybrid value true"
 Write-Host "Aggression default: 145 (range 0..200)"
 Write-Host "PGO: $Target (set STOCKLESS_PGO=1 to use the pinned Stockfish profile-build)"
 Write-Host "ARCH=native creates a CPU-specific binary; keep AVX2 for broad compatibility."
-Write-Host "ThreatHistory: default OFF (toggle with StocklessThreatHistory)"

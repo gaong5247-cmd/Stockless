@@ -63,86 +63,9 @@ def materialize(out: Path) -> None:
     shutil.copytree(OVERLAY, target_overlay)
 
     search_cpp = out / "src" / "search.cpp"
-    search_h = out / "src" / "search.h"
-    movepick_h = out / "src" / "movepick.h"
-    movepick_cpp = out / "src" / "movepick.cpp"
     engine_cpp = out / "src" / "engine.cpp"
     misc_cpp = out / "src" / "misc.cpp"
     makefile = out / "src" / "Makefile"
-
-    # Keep the experimental history owned by each Stockfish search Worker.
-    replace_once(
-        search_h,
-        '#include "history.h"\n',
-        '#include "history.h"\n#include "stockless_core/threat_history.h"\n',
-    )
-    replace_once(
-        search_h,
-        "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n",
-        "    ButterflyHistory mainHistory;\n    LowPlyHistory    lowPlyHistory;\n"
-        "    Stockless::ThreatQuietHistory threatQuietHistory;\n",
-    )
-
-    replace_once(
-        movepick_h,
-        '#include "history.h"\n',
-        '#include "history.h"\n#include "stockless_core/threat_history.h"\n',
-    )
-    replace_once(
-        movepick_h,
-        "               const SharedHistories*,\n               int);\n",
-        "               const SharedHistories*,\n               int,\n"
-        "               const Stockless::ThreatQuietHistory* = nullptr);\n",
-    )
-    replace_once(
-        movepick_h,
-        "    const SharedHistories*       sharedHistory;\n",
-        "    const SharedHistories*       sharedHistory;\n"
-        "    const Stockless::ThreatQuietHistory* threatQuietHistory = nullptr;\n",
-    )
-    replace_once(
-        movepick_cpp,
-        '#include "position.h"\n',
-        '#include "position.h"\n#include "stockless_core/config.h"\n'
-        '#include "stockless_core/threat_signal.h"\n',
-    )
-    replace_once(
-        movepick_cpp,
-        "                       const SharedHistories*       sh,\n"
-        "                       int                          pl) :\n",
-        "                       const SharedHistories*       sh,\n"
-        "                       int                          pl,\n"
-        "                       const Stockless::ThreatQuietHistory* th) :\n",
-    )
-    replace_once(
-        movepick_cpp,
-        "    sharedHistory(sh),\n",
-        "    sharedHistory(sh),\n    threatQuietHistory(th),\n",
-    )
-    # Compute enemy attack map once per generated quiet-move list, not per move.
-    replace_once(
-        movepick_cpp,
-        "    Color us = pos.side_to_move();\n",
-        "    Color us = pos.side_to_move();\n"
-        "\n"
-        "    [[maybe_unused]] int stocklessHistoryWeight = 0;\n"
-        "    [[maybe_unused]] Bitboard stocklessEnemyAttacks = 0;\n"
-        "    if constexpr (Type == QUIETS)\n"
-        "        if (threatQuietHistory && Stockless::threat_history_enabled())\n"
-        "        {\n"
-        "            stocklessHistoryWeight = Stockless::threat_history_weight();\n"
-        "            if (stocklessHistoryWeight)\n"
-        "                stocklessEnemyAttacks = Stockless::attacks_for(pos, ~us)\n" "                                       | Attacks::attacks_bb(KING, pos.square<KING>(~us));\n"
-        "        }\n",
-    )
-    replace_once(
-        movepick_cpp,
-        "            int value = 2 * (*mainHistory)[us][m.raw()];\n",
-        "            int value = 2 * (*mainHistory)[us][m.raw()];\n"
-        "            if (stocklessHistoryWeight)\n"
-        "                value += stocklessHistoryWeight\n"
-        "                       * threatQuietHistory->get(stocklessEnemyAttacks, us, m) / 100;\n",
-    )
 
     replace_once(
         search_cpp,
@@ -163,11 +86,7 @@ def materialize(out: Path) -> None:
     const int stocklessCorrectionSignal =
       std::min(256, int(std::abs(correctionValue) / 131072));
 
-""" + node_anchor.replace(
-        "                  &sharedHistory, ss->ply);\n",
-        "                  &sharedHistory, ss->ply,\n"
-        "                  Stockless::threat_history_enabled() ? &threatQuietHistory : nullptr);\n",
-    )
+""" + node_anchor
     replace_once(search_cpp, node_anchor, node_patch)
 
     # The original v0.7 policy was computed for EVERY legal move before Step 15,
@@ -179,24 +98,21 @@ def materialize(out: Path) -> None:
     policy_factory_anchor = """    int moveCount = 0;
 """
     policy_factory_patch = policy_factory_anchor + """
-    // Build the policy only when needed, against the original node's
-    // precomputed threat signal, with no change to feature timing.
+    // Prepare features immutable throughout this node's move loop once.
+    // Do not hoist depth, beta-alpha or the next ply's cutoff counter:
+    // they may change between moves searched in the same node.
+    const auto stocklessPolicyBase = Stockless::prepare_search_policy({
+        stocklessCorrectionSignal,
+        improving,
+        ss->inCheck,
+        PvNode,
+        cutNode,
+        stocklessThreat,
+    }, stocklessSettings);
     const auto stocklessPolicyForMove = [&]() noexcept {
-        return Stockless::make_search_policy({
-          int(depth),
-          moveCount,
-          int(beta - alpha),
-          stocklessCorrectionSignal,
-          int((ss + 1)->cutoffCnt),
-          improving,
-          capture,
-          givesCheck,
-          ss->inCheck,
-          ss->ttPv,
-          PvNode,
-          cutNode,
-          stocklessThreat,
-        }, stocklessSettings);
+        return Stockless::make_prepared_move_policy(
+          stocklessPolicyBase, int(depth), moveCount, int(beta - alpha),
+          int((ss + 1)->cutoffCnt), ss->ttPv, capture, givesCheck);
     };
 """
     replace_once(search_cpp, policy_factory_anchor, policy_factory_patch)
@@ -230,43 +146,6 @@ def materialize(out: Path) -> None:
 
     # Stockless quietMoveAllowance was always zero: do not patch the native
     # Stockfish late-move pruning threshold or carry a dead policy field.
-
-    # Preserve the normal Stockfish history lifecycle.
-    replace_once(
-        search_cpp,
-        "    mainHistory.fill(-5);\n",
-        "    mainHistory.fill(-5);\n    threatQuietHistory.clear();\n",
-    )
-    replace_once(
-        search_cpp,
-        "    lowPlyHistory.fill(102);\n",
-        "    lowPlyHistory.fill(102);\n"
-        "    if (Stockless::threat_history_enabled())\n"
-        "        threatQuietHistory.age();\n",
-    )
-
-    # Reinforce successful quiet moves and penalize searched unsuccessful ones.
-    # The reduced amplitudes limit disruption to Stockfish's primary history.
-    replace_once(
-        search_cpp,
-        "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n",
-        "        update_quiet_histories(pos, ss, workerThread, bestMove, bonus * 899 / 1024);\n"
-        "        const bool stocklessTrainHistory = Stockless::threat_history_enabled()\n"
-        "                                        && Stockless::threat_history_weight() > 0;\n"
-        "        const Bitboard stocklessEnemyAttacks =\n"
-        "          stocklessTrainHistory\n" "            ? Stockless::attacks_for(pos, ~pos.side_to_move())\n" "                | Attacks::attacks_bb(KING, pos.square<KING>(~pos.side_to_move()))\n" "            : 0;\n"
-        "        if (stocklessTrainHistory)\n"
-        "            workerThread.threatQuietHistory.update(\n"
-        "              stocklessEnemyAttacks, pos.side_to_move(), bestMove, bonus * 450 / 1024);\n",
-    )
-    replace_once(
-        search_cpp,
-        "            update_quiet_histories(pos, ss, workerThread, move, -actualMalus);\n",
-        "            update_quiet_histories(pos, ss, workerThread, move, -actualMalus);\n"
-        "            if (stocklessTrainHistory)\n"
-        "                workerThread.threatQuietHistory.update(\n"
-        "                  stocklessEnemyAttacks, pos.side_to_move(), move, -actualMalus / 2);\n",
-    )
 
     replace_once(
         search_cpp,
@@ -330,17 +209,6 @@ def materialize(out: Path) -> None:
           return std::nullopt;
       }));
 
-    options.add(
-      "StocklessThreatHistory", Option(Stockless::default_threat_history(), [](const Option& o) {
-          Stockless::set_threat_history_enabled(bool(o));
-          return std::nullopt;
-      }));
-
-    options.add(
-      "StocklessHistoryWeight", Option(Stockless::default_threat_history_weight(), 0, 200, [](const Option& o) {
-          Stockless::set_threat_history_weight(int(o));
-          return std::nullopt;
-      }));
 """
     replace_once(engine_cpp, option_anchor, option_patch)
 

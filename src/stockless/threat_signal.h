@@ -76,9 +76,10 @@ inline ThreatSignal compute_threat_signal(const Position&      pos,
     const int attackedEnemy = popcount(ourAttacks & pos.pieces(them));
     const int attackedUs    = popcount(theirAttacks & pos.pieces(us));
 
-    // pinners(c) are enemy sliders pinning pieces to color c's king.
-    const int pinsWeCreate = popcount(pos.pinners(them));
-    const int pinsWeSuffer = popcount(pos.pinners(us));
+    // pinners(c) contains sliders of color c pinning pieces to the enemy
+    // king (Position::update_slider_blockers stores them under ~kingColor).
+    const int pinsWeCreate = popcount(pos.pinners(us));
+    const int pinsWeSuffer = popcount(pos.pinners(them));
 
     out.attackPressure =
       std::clamp(36 * kingContactForUs + 12 * attackedEnemy + 24 * pinsWeCreate, 0, 256);

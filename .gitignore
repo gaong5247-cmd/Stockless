@@ -3,3 +3,5 @@ networks/
 *.nnue
 *.exe
 *.o
+__pycache__/
+*.py[cod]
