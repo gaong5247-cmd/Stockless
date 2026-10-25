@@ -1,14 +1,17 @@
 # Stockless v0.9.0 — AVX2 PGO and lean search
 
-**Original experiment: not approved. Final publication is conditional on the
-separately predeclared longer-time-control replication.**
+**Published as [Latest Stockless v0.9.0](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0).
+Final match gate approved; original experiment remains not approved.**
 
-The original validation left Latest at Stockless v0.8.9. The
-[final replication protocol](LONG_REPLICATION_20261025.md),
-`20261025-long-replication-99`, defines one further fixed sample using the same
-engine binaries. The original failed decision remains part of the record.
-Any final approval must identify this separate protocol, preserve both reports,
-and append its actual results below; predeclaring it does not establish success.
+Platform builds and package checks passed, and publication completed on
+**2026-10-25 at 04:18:36 UTC**, with eleven assets.
+The [final replication protocol](https://github.com/gaong5247-cmd/Stockless/blob/4a9c1e55b2ed28c993261d3cdea671e90d823c2f/docs/LONG_REPLICATION_20261025.md),
+`20261025-long-replication-99`, passed in
+[Actions run 40156434508](https://github.com/gaong5247-cmd/Stockless/actions/runs/40156434508)
+using the same frozen engine binaries. The
+[final approved report](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/validation-report.json) and
+[original not-approved report](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/prior-report.json)
+are included in the release and preserve both decisions.
 
 ## Changes
 
@@ -32,21 +35,22 @@ and append its actual results below; predeclaring it does not establish success.
 
 | Package | Intended use | Strength-evidence scope |
 |---|---|---|
-| `linux-x86_64-avx2-pgo` | Linux x86-64 with AVX2 | The exact tested binary; publication preserves its bytes and requires final protocol approval |
-| `windows-x86_64-avx2-pgo` | Windows 64-bit with AVX2 | Separately compiled PGO companion; UCI, nodes and bestmoves checked |
+| `linux-x86_64-avx2-pgo` | Linux x86-64 with AVX2 | The exact match-approved binary, published byte-for-byte |
+| `windows-x86_64-avx2-pgo` | Windows 64-bit with AVX2 | Separately compiled PGO companion; UCI, nodes and bestmoves checked; no independent Elo gain established |
 | Windows/Linux x86-64 universal | CPU instruction-set dispatch and compatibility | Ordinary, non-PGO builds; no independent Elo gain established |
 | Linux ARM64 / Android ARM64 / Android ARMv7 | ARM compatibility | Ordinary, non-PGO builds; no independent Elo gain established |
 
-AVX2 PGO binaries require AVX2 support. All seven ZIPs have source identities,
-licenses, manifests and checksums. The NNUE is embedded. Android packages contain
-native UCI executables for a compatible chess GUI, not APKs.
+AVX2 PGO binaries require AVX2 support. All seven ZIPs passed checks for source
+identities, licenses, manifests and checksums before publication. The NNUE is
+embedded. Android packages contain native UCI executables for a compatible chess
+GUI, not APKs.
 
 Defaults: Hybrid ON; Aggression 145; Threats ON; Overdrive OFF. Mobile defaults ON
 on Android and OFF on desktop. The upstream Stockfish and NNUE pins are unchanged.
 
 ### Scope of the match evidence
 
-The appended match evidence compares **the exact Linux AVX2 PGO candidate** with
+The match evidence compares **the exact Linux AVX2 PGO candidate** with
 **v0.8.9 rebuilt using ordinary optimization, the same compiler and AVX2 ISA**.
 It does not compare against the old downloadable universal executable. It measures
 the complete source-plus-build combination and cannot isolate source cleanup's
@@ -64,19 +68,29 @@ passed its 4096-game short confirmation at +7.13 Elo (pair 95% interval
 [+3.20, +11.06]), but its 1024-game longer confirmation was inconclusive at
 +3.39 Elo ([−2.40, +9.19]). Its release gate therefore remains **not approved**.
 
-The final protocol predeclares **8192 new games at 5+0.05**, using the exact
-candidate and baseline artifacts from that run. It requires the new sample's
-**two-sided 99% paired lower Elo bound >0** plus the unchanged original short
-confirmation's **95% lower bound >0 and point Elo >=+5**. The original longer
-sample is not pooled with the new sample. There is no further attempt after this
-protocol. The new 99% interval is not a global 99% guarantee: the two longer-time
-testing opportunities have an approximate nominal one-sided union bound of 3%,
-subject to the stated normal-approximation assumptions.
+The final protocol completed **8192 new games at 5+0.05**, using the exact
+candidate and baseline artifacts from that run:
 
-If approved, the release tag targets engine source
-`1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`; the newer validation workflow/protocol
-revision is recorded separately. The exact binary identities and publication
-conditions are fixed in the linked protocol.
+| Confirmation sample | Games | W / D / L | Candidate score | Relative Elo | Selected pair interval |
+|---|---:|---|---:|---:|---|
+| Original short, 2+0.02, reused | 4096 | 373 / 3434 / 289 | 51.025391% | +7.126143 | 95%: [+3.195154, +11.058957] |
+| Final longer, 5+0.05, new | 8192 | 435 / 7399 / 358 | 50.469971% | +3.265787 | 99%: [+0.581509, +5.950455] |
+
+The new sample passed its **two-sided 99% paired lower Elo bound >0** rule; the
+unchanged original short result passed its **95% lower bound >0 and point Elo >=+5**
+rule. This is a modest measured gain under the stated conditions. The old
+longer sample is preserved and excluded from the new estimate. This series played
+**14336 actual games**, including both screens and both original confirmation
+stages; the reused short games are counted once. No further attempt follows.
+
+The new 99% interval is not a global 99% guarantee: the two longer-time testing
+opportunities have an approximate nominal one-sided union bound of 3%, subject to
+the stated normal-approximation assumptions.
+
+The published release tag targets engine source
+`1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`. The validation workflow/protocol
+revision, `4a9c1e55b2ed28c993261d3cdea671e90d823c2f`, is recorded separately.
+The exact binary identities and publication conditions are fixed in the linked protocol.
 
 ### PGO build integrity
 
@@ -87,7 +101,8 @@ excluded from performance claims; the exact cause of its incomplete cleanup was
 not established. The verified clean build measured a modest +1.77% median NPS
 against the same corrected ordinary source in three local repetitions, with
 identical nodes/bestmoves. These timing measurements are not the strength evidence;
-the independent Actions matches below are the publication gate.
+the independent Actions matches above are the strength gate. Publication also
+requires successful package verification.
 
 ## 한국어
 
@@ -96,15 +111,18 @@ ThreatHistory 실험 코드를 제거했습니다. 탐색 정책 계산을 노�
 기존 실험 코드의 깊이 캐시 오류도 바로잡았습니다. 이 캐시 오류는 공개된 v0.8.9에는 없었습니다.
 
 최초 검증은 단기 4096판을 통과했지만 장기 1024판의 구간이 0을 포함해 공개 승인에
-실패했고, 그 결정은 Latest를 v0.8.9로 유지했습니다. 최초 결과와 실패 판정은 그대로
-보존하며, 별도 최종 계획의 성공 여부와 구분합니다.
+실패했습니다. 최초 결과와 미승인 판정은 그대로 보존하며, 이후 별도 최종 재검증의
+통과와 구분합니다. 최종 대국 게이트와 플랫폼 빌드·패키지 검증을 모두 통과했고,
+2026-10-25 04:18:36 UTC에 [v0.9.0을 Latest로 공개](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0)했습니다.
+최초 미승인 보고서와 최종 승인 보고서도 함께 배포합니다.
 
-최종 공개 조건은 같은 두 실행 파일로 새로운 포지션에서 진행하는 5+0.05 대국
-8192판의 **양측 99% 쌍 단위 구간 Elo 하한 >0**, 그리고 기존 단기 4096판의
-**95% 하한 >0 및 점추정 Elo >=+5**입니다. 이전 장기 1024판과 예비전은 새 통계에
-합치지 않습니다. 이는 별도로 사전 선언한 마지막 계획이며, 실행이나 성공을 미리
-주장하지 않습니다. 결과와 무관하게 그 뒤 추가 시도는 하지 않습니다. 새로운 99%
-구간이 전체 절차의 99% 확실성을 뜻하는 것도 아닙니다. 실제 최종 판정이 있으면
-최초 보고서와 함께 아래 결과 및 첨부 보고서에 명시합니다.
+같은 두 실행 파일로 새로운 포지션에서 진행한 최종 5+0.05 대국 8192판은
+**435승 / 7399무 / 358패**, 승점 **50.469971%**, **+3.265787 Elo**였으며,
+양측 99% 쌍 단위 구간 **+0.581509~+5.950455**로 사전 기준을 통과했습니다.
+기존 단기 4096판은 +7.126143 Elo(95% 구간 +3.195154~+11.058957)로
+**95% 하한 >0 및 점추정 Elo >=+5** 조건을 유지합니다. 이전 장기 1024판과
+예비전은 새 장기 통계에 합치지 않았습니다. 실제 총 14336판이며, 재사용한
+단기 결과는 한 번만 셌습니다. 이 검증 뒤 추가 시도는 없습니다. 새로운 99%
+구간이 전체 절차의 99% 확실성을 뜻하지는 않습니다.
 
 측정된 기력 결과는 실제 대국에 사용된 Linux AVX2 PGO 파일에 한정합니다. Windows PGO는 별도 빌드이며, Universal·Android 파일은 호환용 일반 빌드입니다. 이 파일들에 같은 Elo 상승을 적용하지 않습니다.

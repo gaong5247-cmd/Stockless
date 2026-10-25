@@ -1,20 +1,25 @@
 # Stockless v0.9.0 predeclared validation plan and completed results
 
-**Original experiment completed: valid evidence, publication not approved. Latest remains Stockless v0.8.9.**
+**Original experiment: not approved. Separate final replication: passed and
+published as [Latest Stockless v0.9.0](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0).**
 
 The PGO validation completed in
 [Actions run 40153018357](https://github.com/gaong5247-cmd/Stockless/actions/runs/40153018357)
 using candidate source `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`.
 The shorter-time-control confirmation passed, but the longer-time-control
 confirmation did not establish a positive gain at the predeclared confidence
-threshold. Both were required, so no v0.9.0 release was published.
+threshold. Both were required, so that run did not approve or publish v0.9.0.
 
 A separate [final longer-time-control replication protocol](LONG_REPLICATION_20261025.md),
-`20261025-long-replication-99`, has now been predeclared after reviewing these
-results. It uses the identical binary artifacts on 8192 fresh games, requires a
-positive two-sided 99% paired lower bound, and reuses the unchanged original short
-pass. It does not pool the old longer sample or revise this experiment's failed
-gate. Its status here is a plan, not a claim of execution or success.
+`20261025-long-replication-99`, was predeclared after reviewing these results and
+completed in [Actions run 40156434508](https://github.com/gaong5247-cmd/Stockless/actions/runs/40156434508).
+Its 8192 fresh games passed the two-sided 99% paired lower-bound requirement, and
+the unchanged original short result still passes. The final match report is
+**valid and approved**. It does not pool the old longer sample or revise this
+experiment's failed gate. Multi-platform builds and package checks passed, and
+v0.9.0 was published as Latest on **2026-10-25 at 04:18:36 UTC**. The release
+includes the [actual final JSON report](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/validation-report.json)
+and the [original not-approved report](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/prior-report.json).
 
 Baseline is the immutable source commit
 `d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f`, published as Stockless v0.8.9.
@@ -45,7 +50,8 @@ The second candidate changes the compilation strategy to verified PGO. It is not
 a rerun of the same executable. Its screening and confirmation positions all come
 from fresh ranges. The measured results apply only to the exact tested Linux PGO
 binary. The publication workflow was designed to reuse those bytes only after
-approval; it did not publish. No strength gain is established for companion builds.
+approval; the original run did not publish. No strength gain is established for
+companion builds.
 
 Local verification on the exact corrected source found clean PGO +1.77% median NPS
 versus ordinary compilation, identical 2,465,981 nodes and 51 bestmoves at depth 14
@@ -54,7 +60,7 @@ instrumentation and was excluded; the corrected process forces every object to
 recompile and verifies that no profiling symbols remain. The unexplained partial
 cleanup is not attributed to an upstream defect. Local timing is not Elo evidence.
 
-## Completed PGO validation
+## Completed original PGO validation
 
 All planned games completed and the evidence passed the game, pairing, identity
 and fault checks. The counts below are candidate wins/draws/losses. Elo intervals
@@ -70,7 +76,7 @@ The short confirmation met both requirements: positive lower confidence bound
 and point Elo of at least +5. The longer confirmation had a positive point
 estimate, but its interval included zero. This is not evidence of a confirmed
 regression; it is insufficient evidence for the required longer-time-control gain.
-The complete release gate therefore returned **not approved**.
+The original release gate therefore returned **not approved** and remains false.
 
 The screen is excluded from the confirmation statistics, and the two confirmation
 time controls are reported separately. The earlier ordinary-build screen remains
@@ -79,7 +85,39 @@ bundled results isolates the effect of the pin fix, policy cleanup or PGO alone.
 They compare the tested Linux AVX2 PGO candidate with a freshly compiled ordinary
 AVX2 v0.8.9, not with the previously downloadable universal binary.
 
-## Frozen experiment
+## Completed final replication
+
+The separate final run reused the identical candidate and baseline binaries from
+run 40153018357. It played all 8192 newly allocated games, passed the integrity
+checks, and returned `valid: true`, `approved: true` under
+`20261025-long-replication-99`. The selected confidence level for the new longer
+sample is **99%**, as declared before those games. The exact figures are in the
+[final JSON report](validation/v0.9.0-final-long-20261025.json); the
+[original not-approved report](validation/v0.9.0-pgo-20261025.json) is preserved.
+
+| Stage in final report | Time control | Games | W / D / L | Candidate score | Relative Elo | Selected pair interval | Decision |
+|---|---|---:|---|---:|---:|---|---|
+| Original short confirmation, reused | 2+0.02 | 4096 | 373 / 3434 / 289 | 51.025391% | +7.126143 | 95%: [+3.195154, +11.058957] | Passed unchanged |
+| New final longer replication | 5+0.05 | 8192 | 435 / 7399 / 358 | 50.469971% | +3.265787 | 99%: [+0.581509, +5.950455] | Passed |
+
+The final engine source is `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`; the
+orchestrator revision is `4a9c1e55b2ed28c993261d3cdea671e90d823c2f`. These are
+different identities. The tested baseline is v0.8.9 rebuilt using ordinary
+optimization with the same compiler and fixed AVX2 target. The measured gain is
+modest and applies to that exact Linux PGO comparison.
+
+This series played **14336 actual games**: 512 in the ordinary-build screen,
+512 in the PGO screen, 4096 in the original short confirmation, 1024 in the
+original longer confirmation, and 8192 in the final replication. Reusing the
+short result does not add another 4096 games. Neither the old longer result nor
+the screens enter the new longer estimate; the two time controls remain separate.
+
+This was the final attempt; no additional candidate or match attempt follows in
+this series. The new 99% interval is not a global 99% guarantee. The approximate
+nominal one-sided union bound across the two longer testing opportunities is 3%,
+with the assumptions and selection limitations documented in the final protocol.
+
+## Original frozen experiment
 
 | Stage | Games | Time control | Distinct starting positions | Purpose |
 |---|---:|---|---:|---|
@@ -117,12 +155,15 @@ Publication is disabled on ordinary main/version pushes. The reusable universal
 build can publish only when called by the successful gate, then rechecks an approved
 report for its exact candidate commit, fixed baseline, both planned samples and
 positive intervals. All seven ZIP packages must pass manifest, identity and hash
-checks. Existing tags/releases are never overwritten. The completed run did not
-meet the longer-confirmation threshold, so publication was skipped, Latest remains
-v0.8.9, and the candidate and all completed evidence are preserved for review.
+checks. Existing tags/releases are never overwritten. The original completed run
+did not meet its longer-confirmation threshold, so its publication was skipped.
+The separate final protocol passed the match gate; platform builds, package checks
+and publication then completed successfully. The
+[v0.9.0 release](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0)
+is now Latest, with seven platform ZIPs, checksums, the final JSON and Markdown
+reports, and the original not-approved JSON report: eleven assets in total.
 
-Any later publication requires the separately named final protocol to pass and
-must preserve both decisions in its evidence. The engine source/tag target remains
-`1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`; the newer workflow/protocol commit must
-be recorded separately. No additional release attempt follows that final protocol,
-regardless of its outcome.
+Publication preserves both decisions in its evidence. The engine source/tag target is
+`1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`; the newer workflow/protocol commit is
+recorded separately as `4a9c1e55b2ed28c993261d3cdea671e90d823c2f`. No additional
+release attempt follows this final protocol.

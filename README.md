@@ -10,19 +10,21 @@
 
 **Live engine testing / Arena:** [OpenFishtest Arena](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — view match results and standings (maintained as a separate testing project).
 
-**Latest stable release:** [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9) (universal UCI builds, conservative search refactor and corrected arena defaults). **Earlier research archives:** [v0.8–v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases); [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1) remains a separate opt-in research pre-release. Release numbering does not establish a verified playing-strength gain.
+**Latest stable release:** [Stockless v0.9.0](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0), published on 2026-10-25 after the final match gate and package checks passed. The release includes the tested Linux AVX2 PGO binary, companion builds and both validation reports. **Previous stable release:** [v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9). **Earlier research archives:** [v0.8–v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases); [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1) remains a separate opt-in research pre-release. Release numbering alone does not establish a verified playing-strength gain.
 
-**v0.9.0 PGO validation candidate — publication not approved:** this branch removes the unsuccessful ThreatHistory subsystem, prepares invariant search-policy arithmetic once per node, fixes pin ownership, keeps changing search depth live, and disables desktop Overdrive completely in mobile mode. Candidate `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46` completed [Actions run 40153018357](https://github.com/gaong5247-cmd/Stockless/actions/runs/40153018357): its 512-game screen scored 52.441%; the 4,096-game confirmation at 2+0.02 passed at +7.13 Elo (pair 95% interval +3.20 to +11.06), while the 1,024-game confirmation at 5+0.05 was inconclusive at +3.39 Elo (−2.40 to +9.19). Both confirmation stages were required, so **no v0.9.0 release was published and Latest remains v0.8.9**. These results apply to the exact Linux AVX2 PGO candidate against an ordinary AVX2 rebuild of v0.8.9. The [full results and predeclared gate](docs/VALIDATION_20261025.md) also preserve the earlier ordinary-build screen's 48.633% result. The candidate's UCI identity remains `Stockless v0.9.0`; Overdrive remains OFF by default.
+**v0.9.0 — verified and published:** this release removes the unsuccessful ThreatHistory subsystem, prepares invariant search-policy arithmetic once per node, fixes pin ownership, keeps changing search depth live, and disables desktop Overdrive completely in mobile mode. Engine `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46` passed its final paired-match gate in [Actions run 40156434508](https://github.com/gaong5247-cmd/Stockless/actions/runs/40156434508). Platform builds, package checks and publication completed; **v0.9.0 is now Latest**. See the [release notes](docs/RELEASE_v0.9.0.md). Its UCI identity is `Stockless v0.9.0`; Overdrive remains OFF by default.
 
-**Final replication plan:** [protocol `20261025-long-replication-99`](docs/LONG_REPLICATION_20261025.md) predeclares one final 8,192-game test at 5+0.05 on fresh opening pairs, using the exact same candidate and baseline binaries. It requires a positive lower bound from the new sample's two-sided 99% paired interval and the unchanged original short-confirmation pass. The old longer sample is preserved and excluded from the new estimate; its original failed gate stays false. No further attempt follows this protocol. This is a plan, not a claim that the replication has started or succeeded; the new interval is not a global 99% guarantee.
+**Measured improvement:** the final 8,192 fresh games at 5+0.05 finished **435W / 7,399D / 358L**, scoring **50.470%**, or **+3.27 Elo with a two-sided pair 99% interval of +0.58 to +5.95**. The original 4,096-game short confirmation at 2+0.02 remains a separate, reused result: 373W / 3,434D / 289L, +7.13 Elo (pair 95% interval +3.20 to +11.06). These are modest gains for the exact Linux AVX2 PGO binary against v0.8.9 rebuilt with ordinary optimization, the same compiler and the same AVX2 target. They do not establish the same gain for companion builds or compare against the old downloadable universal executable. The [final protocol and results](docs/LONG_REPLICATION_20261025.md) and [published JSON evidence](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/validation-report.json) preserve the source and binary identities. The new interval is not a global 99% guarantee; no further attempt follows this protocol.
 
-**Universal release v0.8.9:** [platform downloads, installation, UCI defaults and verification results](docs/RELEASE_v0.8.9.md). The older [v0.7.1 release guide](docs/UNIVERSAL_RELEASE.md) remains archived.
+**Earlier results remain visible:** the ordinary-build screen scored 48.633% and stopped. The PGO screen scored 52.441%; its original 1,024-game longer confirmation was inconclusive at +3.39 Elo (pair 95% interval −2.40 to +9.19), so the original gate remains **not approved**. The later replication is a separate decision and excludes those older longer games from its estimate. [All stages and their original decisions](docs/VALIDATION_20261025.md) are preserved. This validation series played **14,336 actual games** in total; the reused short confirmation is counted once.
 
-**Optimization candidate (not yet strength-verified):** [per-node policy snapshots, CPU-native PGO builds and rigorous bench gating](docs/OPTIMIZATION_20261018.md). Search fast-path changes are in the source; no Elo gain is claimed.
+**Previous universal release v0.8.9:** [archived installation, UCI defaults and verification results](docs/RELEASE_v0.8.9.md). The older [v0.7.1 release guide](docs/UNIVERSAL_RELEASE.md) remains archived.
+
+**Archived optimization proposal (2026-10-18):** [per-node policy snapshots, CPU-native PGO builds and bench gating](docs/OPTIMIZATION_20261018.md). This predates the completed validation above; no isolated Elo contribution is established for any one source or compiler change.
 
 **Historical research (stable-tag archive):** [v0.7 threat-conditioned history](https://github.com/gaong5247-cmd/Stockless/blob/Stockless_v0.8.9/docs/EXPERIMENT_07.md) is retained as an audit record; the implementation is absent from this lean branch.
 
-**Historical tournament:** [v0.7 history tournament report](docs/HISTORY_TUNING_REPORT.md) documented a failed 800-game independent holdout. The old ON/OFF tuner and promotion workflow have been removed in this lean experiment.
+**Historical tournament:** [v0.7 history tournament report](https://github.com/gaong5247-cmd/Stockless/blob/Stockless_v0.8.9/docs/HISTORY_TUNING_REPORT.md) documented a failed 800-game independent holdout. The old ON/OFF tuner and promotion workflow have been removed in this lean experiment.
 
 ## Architecture
 
@@ -85,6 +87,14 @@ make -C build/stockless-src/src -j build ARCH=x86-64-avx2
 ```
 
 On Windows, use `./scripts/build-windows.ps1` in PowerShell. The materialization script checks pinned upstream commits, copies the Stockfish tree, injects Stockless headers and search/UCI changes, and produces buildable sources under `build/stockless-src/`. It fails if expected patch anchors or upstream revisions do not match. Choose an architecture supported by your CPU and toolchain.
+
+The command above makes an ordinary build. For a local GCC PGO build on an AVX2-capable host, run this after materialization:
+
+```bash
+bash scripts/build-pgo.sh build/stockless-src/src x86-64-avx2 gcc 4
+```
+
+The helper trains a local profile, forces profile-use recompilation and rejects remaining instrumentation. A custom build is not the exact tested artifact and does not inherit its measured Elo result.
 
 ## UCI options
 
@@ -153,15 +163,17 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 
 **실시간 엔진 대국 / 아레나:** [OpenFishtest Arena 바로가기](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — 엔진 대국 결과와 순위를 확인할 수 있는 별도 테스트 프로젝트입니다.
 
-**최신 정식 릴리스: [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9).** v0.8~v0.8.7은 연구 기록용 릴리스로 유지하고, [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1)은 별도 프리릴리스입니다. 공개된 v0.8.9 안정판 바이너리는 UCI에서 `id name Stockless v0.8.9`로 응답합니다. 버전 번호 자체가 기력 향상을 뜻하지 않으며, 정식 Stockfish 19를 능가한다는 통계적 증거는 아직 없습니다.
+**최신 정식 릴리스: [Stockless v0.9.0](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0).** 최종 대국과 패키지 검증을 통과해 2026-10-25에 Latest로 공개했습니다. 실제 시험한 Linux AVX2 PGO 파일, 다른 플랫폼용 빌드, 최초·최종 검증 보고서를 함께 제공합니다. [v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9)는 이전 안정판으로 보존합니다. v0.8~v0.8.7은 연구 기록용이며, [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1)은 별도 프리릴리스입니다. 공개된 v0.9.0의 UCI 이름은 `Stockless v0.9.0`입니다. 버전 번호 자체가 기력 향상을 뜻하지 않으며, 정식 Stockfish 19를 능가한다는 통계적 증거는 아직 없습니다.
 
-**v0.9.0 PGO 검증 후보 — 대국 완료, 공개 기준 미충족:** 이 브랜치는 성능이 입증되지 않은 ThreatHistory 구현을 제거하고, 탐색 정책의 공통 계산을 노드 단위로 정리하며, 핀 방향과 모바일 Overdrive 제한을 바로잡습니다. 도입한 기존 실험 코드의 깊이 캐시 오류도 수정했으며, 이 캐시 오류는 공개된 v0.8.9에는 없었습니다. 후보 `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`의 [Actions 대국](https://github.com/gaong5247-cmd/Stockless/actions/runs/40153018357)은 모두 완료됐습니다. 예비 512판은 승점 52.441%, 짧은 시간제한 2+0.02의 4,096판은 +7.13 Elo(쌍 단위 95% 구간 +3.20~+11.06)로 통과했습니다. 긴 시간제한 5+0.05의 1,024판은 +3.39 Elo(−2.40~+9.19)로, 개선 여부를 확정하기에 부족했습니다. 두 확인 단계를 모두 통과해야 하므로 **v0.9.0은 공개되지 않았고 Latest는 v0.8.9로 유지됩니다.** 이 수치는 실제 시험한 Linux AVX2 PGO 파일과 일반 AVX2로 다시 빌드한 v0.8.9 사이의 결과입니다. [전체 결과와 사전 검증 기준](docs/VALIDATION_20261025.md)에는 앞선 일반 빌드의 승점 48.633% 결과도 보존합니다. 후보의 UCI 이름은 `Stockless v0.9.0`입니다.
+**v0.9.0 — 대국 검증과 공개 완료:** 이번 릴리스는 성능이 입증되지 않은 ThreatHistory 구현을 제거하고, 탐색 정책의 공통 계산을 노드 단위로 정리하며, 핀 방향과 모바일 Overdrive 제한을 바로잡습니다. 도입한 기존 실험 코드의 깊이 캐시 오류도 수정했으며, 이 캐시 오류는 공개된 v0.8.9에는 없었습니다. 엔진 `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`는 [최종 Actions 대국](https://github.com/gaong5247-cmd/Stockless/actions/runs/40156434508)의 사전 기준을 통과했습니다. 다중 플랫폼 빌드·패키지 검증·게시까지 완료해 **v0.9.0이 Latest가 됐습니다.** [릴리스 안내](docs/RELEASE_v0.9.0.md)에 상세 변경 사항을 정리했습니다. Overdrive 기본값은 OFF입니다.
 
-**마지막 독립 재검증 계획:** [별도 사전 계획](docs/LONG_REPLICATION_20261025.md)에 따라 같은 두 실행 파일로 겹치지 않는 시작 포지션에서 5+0.05 대국 8,192판을 한 번만 검증하도록 정했습니다. 새 표본의 양측 99% 쌍 단위 구간에서 Elo 하한이 0보다 높고, 기존 단기 확인 통과 조건도 유지돼야 최종 공개를 승인합니다. 이전 장기 1,024판은 보존하되 새 통계에 합치지 않고, 최초 실패 판정도 바꾸지 않습니다. 결과와 무관하게 이 절차 뒤 추가 시도는 없습니다. 아직 실행이나 성공을 주장하는 문구가 아닌 계획이며, 전체 절차가 99% 확실하다는 뜻도 아닙니다.
+**실제로 측정한 개선:** 새로운 포지션에서 진행한 5+0.05 대국 **8,192판은 435승 / 7,399무 / 358패**, 승점 **50.470%**, **+3.27 Elo(양측 99% 쌍 단위 구간 +0.58~+5.95)**였습니다. 기존 2+0.02의 단기 확인 4,096판은 373승 / 3,434무 / 289패, +7.13 Elo(95% 구간 +3.20~+11.06)로, 결과를 그대로 재사용하며 장기 통계와 합치지 않습니다. 실제 시험한 Linux AVX2 PGO 파일과 같은 컴파일러·AVX2 대상으로 일반 최적화하여 다시 빌드한 v0.8.9 사이에서 확인한 소폭 개선입니다. 기존 다운로드용 Universal 파일과 비교한 수치가 아니며 다른 플랫폼에 같은 상승폭을 적용하지 않습니다. [최종 계획·결과](docs/LONG_REPLICATION_20261025.md)와 [공개된 JSON 증거](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/validation-report.json)에 소스와 파일의 동일성을 기록했습니다. 전체 절차의 99% 확실성을 뜻하지 않으며 이 검증 뒤 추가 시도는 없습니다.
 
-**최적화 후보(실전 성능 미검증):** [탐색 노드당 설정 스냅샷, CPU별 PGO 빌드, 벤치마크 기준](docs/OPTIMIZATION_20261018.md). Elo 상승을 검증한 단계는 아닙니다.
+**앞선 결과도 보존합니다:** 일반 빌드의 예비전은 승점 48.633%로 중단했습니다. PGO 예비전은 52.441%였지만 최초 장기 1,024판은 +3.39 Elo(95% 구간 −2.40~+9.19)로 불확실해, 최초 게이트는 계속 **미승인**입니다. 최종 재검증은 별도 판정이며 이전 장기 표본을 새 통계에 합치지 않습니다. [모든 대국과 최초 판정](docs/VALIDATION_20261025.md)을 남겼습니다. 이번 검증에서 실제 진행한 대국은 총 **14,336판**이며, 재사용한 단기 4,096판은 한 번만 셌습니다.
 
-**Universal 배포 v0.8.9:** [Windows·Linux·Android 설치, UCI 설정 및 대국 결과](docs/RELEASE_v0.8.9.md). 공개된 안정판은 History OFF이며, 이 실험 브랜치는 History 자체를 제거했습니다. 이전 [v0.7.1 안내](docs/UNIVERSAL_RELEASE.md)도 보존합니다.
+**이전 최적화 제안(2026-10-18):** [탐색 노드당 설정 스냅샷, CPU별 PGO 빌드, 벤치마크 기준](docs/OPTIMIZATION_20261018.md). 위 최종 검증보다 앞선 기록이며, 개별 소스 변경이나 컴파일 방식 하나의 Elo 기여도를 분리해 입증한 것은 아닙니다.
+
+**이전 Universal 배포 v0.8.9:** [당시 Windows·Linux·Android 설치, UCI 설정 및 대국 결과](docs/RELEASE_v0.8.9.md)를 보존합니다. v0.8.9는 History OFF였으며, v0.9.0에서는 History 구현 자체를 제거했습니다. 이전 [v0.7.1 안내](docs/UNIVERSAL_RELEASE.md)도 보존합니다.
 
 **이전 연구 기록(안정판 태그 보관):** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](https://github.com/gaong5247-cmd/Stockless/blob/Stockless_v0.8.9/docs/EXPERIMENT_07.md). 과거 실험의 기록이며, 현재 브랜치에서는 구현과 `StocklessThreatHistory`·`StocklessHistoryWeight` UCI 옵션을 제거했습니다. 기존 GUI 설정에서도 이 두 옵션을 제거하세요.
 
@@ -204,6 +216,14 @@ make -C build/stockless-src/src -j build ARCH=x86-64-avx2
 ```
 
 Windows에서는 PowerShell에서 `./scripts/build-windows.ps1`을 사용할 수 있습니다. `materialize.py`는 상위 프로젝트 커밋을 검증하고 Stockfish 소스에 Stockless의 탐색 코드 및 UCI 옵션을 적용합니다. CPU와 빌드 환경에 맞는 아키텍처를 선택하세요.
+
+위 명령은 일반 빌드를 만듭니다. AVX2를 지원하는 컴퓨터에서 GCC로 로컬 PGO 빌드를 만들려면 소스 생성 후 다음을 실행하세요.
+
+```bash
+bash scripts/build-pgo.sh build/stockless-src/src x86-64-avx2 gcc 4
+```
+
+이 도구는 로컬 프로파일을 학습하고, 프로파일 사용 단계의 전체 재컴파일 및 계측 코드 제거를 확인합니다. 직접 빌드한 파일은 실제 대국에 사용한 파일과 같다고 보장되지 않으므로 위 Elo 수치를 그대로 적용하지 않습니다.
 
 ## UCI 설정
 

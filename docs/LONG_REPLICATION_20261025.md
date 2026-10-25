@@ -1,11 +1,44 @@
-# Final independent longer-time-control replication
+# Final independent longer-time-control replication: protocol and completed result
 
 **Protocol ID: `20261025-long-replication-99`**
 
-**Status: predeclared plan, with no replication result claimed.** The original
-experiment remains not approved and Latest remains Stockless v0.8.9. This protocol
-defines one final, fixed-size replication; it does not retrospectively change the
-original gate or describe a run as started before it is launched.
+**Status: completed, approved and published as
+[Latest Stockless v0.9.0](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0).**
+Platform builds and package checks passed; publication completed on
+**2026-10-25 at 04:18:36 UTC**. The original experiment remains not approved.
+This separately predeclared fixed-size replication does not retrospectively
+change its decision.
+
+## Completed final result
+
+[Actions run 40156434508](https://github.com/gaong5247-cmd/Stockless/actions/runs/40156434508)
+completed all 8192 new games. The [final JSON report](validation/v0.9.0-final-long-20261025.json)
+records `valid: true` and `approved: true` under this protocol and is also available
+as a [published release asset](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/validation-report.json).
+The table uses the
+selected interval for each stage: 95% for the reused short result and **99% for the
+new longer result**.
+
+| Stage | Games / pairs | W / D / L | Candidate score | Relative Elo | Selected pair interval | Decision |
+|---|---|---|---:|---:|---|---|
+| Original short, 2+0.02, reused | 4096 / 2048 | 373 / 3434 / 289 | 51.025391% | +7.126143 | 95%: [+3.195154, +11.058957] | Passed unchanged |
+| Final longer, 5+0.05, new | 8192 / 4096 | 435 / 7399 / 358 | 50.469971% | +3.265787 | 99%: [+0.581509, +5.950455] | Passed |
+
+The new longer sample's pentanomial pair counts are `[3, 253, 3506, 332, 2]` in
+ascending pair-score order. Its selected lower Elo bound is above zero, and the
+unchanged short result still has a positive 95% lower bound and point Elo above
++5. No old longer games or screen games enter the new longer estimate.
+
+The engine source was `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`, and the
+orchestrator was `4a9c1e55b2ed28c993261d3cdea671e90d823c2f`. All shards recorded
+the frozen binary hashes below. The [original report](validation/v0.9.0-pgo-20261025.json)
+remains `approved: false`; approval here is a separate later decision. The
+following sections retain the predeclared workload, allocation and decision rules.
+
+Across the full validation series, **14336 games were actually played**:
+512 ordinary-build screen + 512 PGO screen + 4096 original short + 1024 original
+longer + 8192 final longer. The reused 4096 short games are counted once. There
+will be no further candidate or match attempt in this series.
 
 ## Reason and preserved original decision
 
@@ -38,9 +71,9 @@ rebuild, retrain the PGO profile, tune an option, or select a different executab
 | Build | Linux x86-64 AVX2, verified PGO | Linux x86-64 AVX2, ordinary optimization |
 | Binary SHA-256 | `8ad4d99da4c9976f4cfc77d59f948541be04bca3c756b2d12dca6505d6e906fc` | `20b9637fa30b90a63b76ebc0bd9ffec601d32b26161a6b86e032e4bf01aa7ba8` |
 
-The workflow/protocol revision is separate from the engine revision. Record both
-in the final audit report. Every shard must verify both binary hashes before
-playing; packaging the approved Linux candidate must preserve the same bytes.
+The workflow/protocol revision is separate from the engine revision; both are
+recorded in the final audit report. Every shard had to verify both binary hashes
+before playing; packaging the approved Linux candidate must preserve the same bytes.
 
 ## Fixed workload and settings
 
@@ -95,7 +128,7 @@ score, relative Elo and a **two-sided 99% approximate normal interval based on
 pair-level variance**. Use the 99% normal critical value, approximately 2.575829,
 and transform score endpoints to Elo. These are fixed-sample intervals, not SPRT.
 
-Approval requires all of the following:
+The predeclared conditions distinguish match approval from publication:
 
 1. All 8192 planned games pass legality, completeness, pairing, unique-opening,
    source/binary identity and engine/connection/time-fault checks.
@@ -103,7 +136,8 @@ Approval requires all of the following:
    (equivalently, its lower score bound exceeds 50%).
 3. The unchanged original **4096-game short confirmation** remains valid and
    passes its original **95% lower Elo bound >0 and point Elo >=+5** requirements.
-4. All release package, manifest, identity and checksum checks pass.
+4. Before publication, all release package, manifest, identity and checksum checks
+   must pass. These checks passed before the v0.9.0 release was published.
 
 The old 1024-game longer confirmation and both screens are excluded from the new
 estimate and its confidence interval. The original gate remains false; any final
@@ -114,7 +148,8 @@ controls into one claimed improvement.
 **This is the final attempt.** After this protocol, do not add games, change a
 confidence level, rerun until favorable, introduce another candidate, or make
 another release attempt in this validation series, regardless of the outcome.
-If any required condition is not met, Latest stays v0.8.9.
+Under the predeclared rule, any unmet required condition would have kept Latest at
+v0.8.9. All publication conditions passed, and Latest is now v0.9.0.
 
 ## Multiple testing and uncertainty
 
@@ -127,22 +162,29 @@ and validity assumptions. This is not a global 99% guarantee, nor a correction
 covering every historical Stockless experiment or selection decision. Reusing the
 already completed short test does not make it a fresh independent replication.
 
-Using the old longer test's observed pair variance only as a planning estimate,
-8192 games would give an approximate **99% margin of ±2.69 Elo** near a small
-effect. If the true gain were +3.39 Elo and that variance persisted, power would
-be about **75%**. The true effect and variance are uncertain; these are workload
-estimates, not a prediction of success or promised precision.
+Before the final games, the old longer test's observed pair variance gave a
+planning estimate of an approximate **99% margin of ±2.69 Elo** and about **75%**
+power if the true gain were +3.39 Elo and that variance persisted. Those were
+uncertain workload estimates, not promised precision or a prediction of success.
+The completed result and its actual interval are reported above.
 
 ## Publication provenance and claim scope
 
-Before final approval, Latest remains v0.8.9. If every condition passes, target
-the v0.9.0 release tag at **engine commit `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`**,
-not the newer workflow/protocol commit. Publish the exact candidate Linux binary
-above, and include both the original and final reports, run URLs, source commits,
-binary hashes and the protocol ID. Never overwrite an existing tag or release.
+Package verification and publication completed successfully. The
+[v0.9.0 release](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0)
+is Latest and targets **engine commit `1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46`**.
+Workflow/protocol commit `4a9c1e55b2ed28c993261d3cdea671e90d823c2f` is recorded
+separately. The release contains the exact tested Linux binary and both the
+[final report](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/validation-report.json)
+and [original report](https://github.com/gaong5247-cmd/Stockless/releases/download/Stockless_v0.9.0/prior-report.json).
+Its eleven assets comprise seven platform ZIPs, checksums, final JSON and Markdown
+reports, and the original JSON report. Source commits, binary hashes and protocol
+identity remain part of the evidence. Existing tags or releases were not overwritten.
 
-Any measured gain describes this exact Linux AVX2 PGO binary against the ordinary
-AVX2 v0.8.9 rebuild under the stated settings. It does not isolate a pin-fix,
+The modest measured gain describes this exact Linux AVX2 PGO binary against the
+ordinary AVX2 v0.8.9 rebuild using the same compiler and the stated settings. The
+baseline was not the downloadable universal artifact; this was not a comparison
+between different ISA targets. It does not isolate a pin-fix,
 cleanup or PGO contribution, prove a gain for Windows or ARM/Android companion
 builds, establish a platform-independent Elo rating, or demonstrate a Stockfish 19
 win.
@@ -150,15 +192,19 @@ win.
 ## 한국어 요약
 
 최초 검증은 짧은 시간제한에서 통과했지만, 긴 시간제한 1024판의 신뢰구간이 0을
-포함해 공개 승인에 실패했습니다. 그 결과와 판정은 그대로 보존합니다. 이번 문서는
-그 결과를 본 뒤 별도로 정한 **마지막 독립 재검증 계획**이며, 아직 새 결과를 주장하지 않습니다.
+포함해 공개 승인에 실패했습니다. 그 결과와 미승인 판정은 그대로 보존합니다. 이후
+별도로 사전 선언한 **마지막 독립 재검증**은 Actions run 40156434508에서 완료됐으며
+대국 게이트를 통과했습니다. 플랫폼 빌드와 패키지 검증도 통과해
+2026-10-25 04:18:36 UTC에 [v0.9.0을 Latest로 공개](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.9.0)했습니다.
 
 같은 두 실행 파일을 그대로 사용해 겹치지 않는 시작 포지션 4096개에서 색을 바꿔
-총 8192판을 5+0.05로 진행합니다. 새 예비전·설정 변경·중간 성공 판정은 없습니다.
-새 대국만 계산한 **양측 99% 쌍 단위 구간의 Elo 하한이 0보다 높고**, 기존 단기
-4096판의 통과 조건도 유지돼야 별도 최종 승인을 할 수 있습니다. 이전 장기 1024판은
-새 통계에 합치지 않습니다. 결과와 무관하게 이 검증 뒤 추가 시도는 하지 않습니다.
+총 8192판을 5+0.05로 진행해 **435승 / 7399무 / 358패**, 승점 **50.469971%**,
+**+3.265787 Elo(양측 99% 쌍 단위 구간 +0.581509~+5.950455)**를 기록했습니다.
+기존 단기 4096판도 +7.126143 Elo(95% 구간 +3.195154~+11.058957)로 통과 조건을
+그대로 유지합니다. 새 예비전·설정 변경·중간 성공 판정은 없었으며, 이전 장기 1024판은
+새 통계에 합치지 않았습니다. 이번 검증의 실제 총 대국 수는 **14336판**으로,
+재사용한 단기 결과는 한 번만 셉니다. 이 검증 뒤 추가 시도는 없습니다.
 
 99%는 새 장기 표본의 구간 수준이며, 전체 절차가 99% 확실하다는 뜻은 아닙니다.
 두 장기 검증의 명목 단측 오류 수준 합계는 정규근사의 전제 아래 약 3%입니다.
-공개 조건을 충족하기 전까지 Latest는 v0.8.9입니다.
+플랫폼 패키지 검증과 실제 공개까지 완료했으며, Latest는 v0.9.0입니다.
