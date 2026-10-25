@@ -1,5 +1,7 @@
 # Stockless v0.9.0 — AVX2 PGO and lean search
 
+**Validation candidate — confirmation pending. Latest remains Stockless v0.8.9.**
+
 This release is eligible for publication only after its exact source passes the
 independent paired-match gate against Stockless v0.8.9. The completed results
 are appended automatically below, with a downloadable JSON audit report.
@@ -13,6 +15,8 @@ are appended automatically below, with a downloadable JSON audit report.
   and `StocklessHistoryWeight`; they are no longer supported options.
 - Prepare invariant policy arithmetic once per search node. Keep depth, TT-PV
   state, window and child-cutoff counts live because they can change between moves.
+  The stale-depth cache was found in the inherited experimental prepared-policy
+  candidate; it was not present in the published v0.8.9 source.
 - Correct pin ownership: `Position::pinners(c)` contains sliders belonging to
   color c. Previously pins created and suffered were reversed in the attack and
   king-danger signals. Four asymmetric real-position regressions cover both colors.
@@ -64,8 +68,12 @@ the independent Actions matches below are the publication gate.
 
 ## 한국어
 
-위협 분석의 핀 방향 오류와 탐색 깊이 캐시 오류를 수정하고, 성능이 입증되지 않았던
-ThreatHistory 실험 코드를 제거했습니다. Linux AVX2 PGO 강화판의 공개 여부는 v0.8.9 일반 빌드 상대 독립 대국 5,120판의
+v0.8.9의 핀 방향 오류와 모바일 Overdrive 제한 오류를 수정하고, 성능이 입증되지 않았던
+ThreatHistory 실험 코드를 제거했습니다. 탐색 정책 계산을 노드 단위로 정리하면서 도입한
+기존 실험 코드의 깊이 캐시 오류도 바로잡았습니다. 이 캐시 오류는 공개된 v0.8.9에는 없었습니다.
+
+현재 v0.9.0은 독립 확인 대국을 진행 중인 후보이며 Latest는 v0.8.9입니다.
+Linux AVX2 PGO 후보의 공개 여부는 v0.8.9 일반 빌드 상대 독립 대국 5,120판의
 완주·오류 여부와 두 시간제한별 쌍 단위 95% 신뢰구간으로 결정합니다. 예비 512판은
 최종 확인 통계에 합치지 않습니다. 실제 결과는 아래 표와 첨부 보고서에서 확인하세요.
 

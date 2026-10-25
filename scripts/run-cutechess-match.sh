@@ -18,6 +18,13 @@ AGGRESSION=${STOCKLESS_AGGRESSION:-145}
 OVERDRIVE=${STOCKLESS_OVERDRIVE:-false}
 THREATS=${STOCKLESS_THREATS:-true}
 MOBILE=${STOCKLESS_MOBILE:-false}
+# The pinned Reckless UCI spelling differs from Stockfish/Stockless. Allow
+# custom engine labels to supply their advertised option name explicitly.
+case "$OPPONENT_NAME" in
+  Reckless*) DEFAULT_OPPONENT_OVERHEAD_OPTION=MoveOverhead ;;
+  *) DEFAULT_OPPONENT_OVERHEAD_OPTION="Move Overhead" ;;
+esac
+OPPONENT_OVERHEAD_OPTION="${OPPONENT_MOVE_OVERHEAD_OPTION:-$DEFAULT_OPPONENT_OVERHEAD_OPTION}"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CUTECHESS=${CUTECHESS:-cutechess-cli}
@@ -35,11 +42,11 @@ mkdir -p "$(dirname "$OUT_PGN")"
 "$CUTECHESS" \
   -tournament round-robin \
   -engine name=Stockless cmd="$STOCKLESS" \
-    option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
+    option.Threads=1 option.Hash=32 "option.Move Overhead=1" \
     option.StocklessHybrid=true option.StocklessAggression="$AGGRESSION" \
     option.StocklessThreats="$THREATS" option.StocklessOverdrive="$OVERDRIVE" option.StocklessMobile="$MOBILE" \
   -engine name="$OPPONENT_NAME" cmd="$OPPONENT_CMD" \
-    option.Threads=1 option.Hash=32 option.MoveOverhead=1 \
+    option.Threads=1 option.Hash=32 "option.${OPPONENT_OVERHEAD_OPTION}=1" \
   -each proto=uci tc="$TC" \
   -games "$GAMES" \
   -repeat \

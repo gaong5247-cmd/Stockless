@@ -12,7 +12,7 @@
 
 **Latest stable release:** [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9) (universal UCI builds, conservative search refactor and corrected arena defaults). **Earlier research archives:** [v0.8–v0.8.7](https://github.com/gaong5247-cmd/Stockless/releases); [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1) remains a separate opt-in research pre-release. Release numbering does not establish a verified playing-strength gain.
 
-**v0.9.0 PGO validation candidate:** this branch removes the unsuccessful ThreatHistory subsystem, prepares invariant search-policy arithmetic once per node, fixes pin ownership, keeps changing search depth live, and disables desktop Overdrive completely in mobile mode. The ordinary-build screen scored 48.633% and was not promoted; the compiler follow-up tests verified PGO on fresh openings. Its UCI identity is `Stockless v0.9.0`; publication requires the [independent fixed-baseline gate](docs/VALIDATION_20261025.md). A candidate version string is not evidence of improved playing strength. Overdrive remains OFF by default.
+**v0.9.0 PGO validation candidate — confirmation pending:** this branch removes the unsuccessful ThreatHistory subsystem, prepares invariant search-policy arithmetic once per node, fixes pin ownership, keeps changing search depth live, and disables desktop Overdrive completely in mobile mode. The ordinary-build screen scored 48.633% and was not promoted; the follow-up evaluates a verified PGO build on fresh openings. Its UCI identity is `Stockless v0.9.0`; publication requires the [independent fixed-baseline gate](docs/VALIDATION_20261025.md). A candidate version string is not evidence of improved playing strength. Overdrive remains OFF by default.
 
 **Universal release v0.8.9:** [platform downloads, installation, UCI defaults and verification results](docs/RELEASE_v0.8.9.md). The older [v0.7.1 release guide](docs/UNIVERSAL_RELEASE.md) remains archived.
 
@@ -151,15 +151,17 @@ See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [UPSTREAM.md](docs/UPSTREAM.m
 
 **실시간 엔진 대국 / 아레나:** [OpenFishtest Arena 바로가기](https://gaong5247-cmd.github.io/OpenFishtest/#arena) — 엔진 대국 결과와 순위를 확인할 수 있는 별도 테스트 프로젝트입니다.
 
-**최신 정식 릴리스: [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9).** v0.8~v0.8.7은 연구 기록용 릴리스로 유지하고, [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1)은 별도 프리릴리스입니다. UCI에서는 `id name Stockless v0.8.9`로 응답합니다. 기존 Stockless 대비 성능 개선 가능성은 있지만, 정식 Stockfish 19를 능가한다는 통계적 증거는 아직 없습니다.
+**최신 정식 릴리스: [Stockless v0.8.9](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.9).** v0.8~v0.8.7은 연구 기록용 릴리스로 유지하고, [v0.8.8-rc1](https://github.com/gaong5247-cmd/Stockless/releases/tag/Stockless_v0.8.8-rc1)은 별도 프리릴리스입니다. 공개된 v0.8.9 안정판 바이너리는 UCI에서 `id name Stockless v0.8.9`로 응답합니다. 버전 번호 자체가 기력 향상을 뜻하지 않으며, 정식 Stockfish 19를 능가한다는 통계적 증거는 아직 없습니다.
+
+**v0.9.0 PGO 검증 후보 — 독립 확인 대국 진행 중:** 이 브랜치는 성능이 입증되지 않은 ThreatHistory 구현을 제거하고, 탐색 정책의 공통 계산을 노드 단위로 정리하며, 핀 방향과 모바일 Overdrive 제한을 바로잡습니다. 도입한 기존 실험 코드의 깊이 캐시 오류도 수정했습니다. 이 캐시 오류는 공개된 v0.8.9에는 없었습니다. 일반 빌드의 예비 512판은 승점 48.633%로 승격되지 않았으며, 후속 PGO 후보는 새로운 시작 포지션으로 검증합니다. 이 브랜치의 UCI 이름은 `Stockless v0.9.0`이지만, 공개하려면 [고정 기준 버전 상대 독립 검증](docs/VALIDATION_20261025.md)을 통과해야 합니다. Latest는 아직 v0.8.9입니다.
 
 **최적화 후보(실전 성능 미검증):** [탐색 노드당 설정 스냅샷, CPU별 PGO 빌드, 벤치마크 기준](docs/OPTIMIZATION_20261018.md). Elo 상승을 검증한 단계는 아닙니다.
 
 **Universal 배포 v0.8.9:** [Windows·Linux·Android 설치, UCI 설정 및 대국 결과](docs/RELEASE_v0.8.9.md). 공개된 안정판은 History OFF이며, 이 실험 브랜치는 History 자체를 제거했습니다. 이전 [v0.7.1 안내](docs/UNIVERSAL_RELEASE.md)도 보존합니다.
 
-**실험 연구:** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](docs/EXPERIMENT_07.md). 기본값은 OFF이며 Elo 상승이 검증된 것은 아닙니다.
+**이전 연구 기록(안정판 태그 보관):** [v0.7 위협별 Quiet History 설계·옵션·A/B 대국 가이드](https://github.com/gaong5247-cmd/Stockless/blob/Stockless_v0.8.9/docs/EXPERIMENT_07.md). 과거 실험의 기록이며, 현재 브랜치에서는 구현과 `StocklessThreatHistory`·`StocklessHistoryWeight` UCI 옵션을 제거했습니다. 기존 GUI 설정에서도 이 두 옵션을 제거하세요.
 
-**자동 튜닝:** [ON/OFF 및 가중치별 대국, 최적 후보 선정, Stockfish 검증과 조건부 기본값 변경](docs/TUNING_PIPELINE_07.md). [v0.7 실제 대국 보고서](docs/HISTORY_TUNING_REPORT.md).
+**이전 튜닝·대국 기록:** [당시 ON/OFF·가중치 튜닝 절차](https://github.com/gaong5247-cmd/Stockless/blob/Stockless_v0.8.9/docs/TUNING_PIPELINE_07.md)와 [v0.7 실제 대국 보고서](https://github.com/gaong5247-cmd/Stockless/blob/Stockless_v0.8.9/docs/HISTORY_TUNING_REPORT.md)를 보존합니다. 800판 독립 확인 대국에서 개선을 입증하지 못했으며, 해당 튜너와 기본값 자동 변경 워크플로는 현재 브랜치에서 제거했습니다.
 
 ## 구성 요소
 
