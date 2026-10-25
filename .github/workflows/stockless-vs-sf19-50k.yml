@@ -1,0 +1,172 @@
+name: Stockless vs Stockfish 19 - 50000 games
+run-name: "Stockless v0.9.0 vs SF19 | 50000 | tc 10+0.1"
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/stockless-vs-sf19-50k.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sf19-50k-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build exact Stockless v0.9.0 on AVX2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46
+          python tools/materialize.py
+          make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2
+          mkdir -p engines openings
+          cp build/stockless-src/src/stockless engines/stockless
+      - name: Build exact official Stockfish 19 on AVX2
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch sf_19 https://github.com/official-stockfish/Stockfish.git sf19
+          test "$(git -C sf19 rev-parse HEAD)" = edb0d9db6731067ec50ce619ff372b463bc4dd5d
+          make -C sf19/src -j2 build ARCH=x86-64-avx2
+          cp sf19/src/stockfish engines/stockfish19
+      - name: Prepare fixed independent paired official openings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install chess==1.11.2
+          curl --fail --retry 3 -L -o official-8moves.zip https://raw.githubusercontent.com/official-stockfish/books/a804a97e709f40aa75a00f9d19e84915b7a3a45c/8moves_v3.pgn.zip
+          curl --fail --retry 3 -L -o sf19_50k.py "https://raw.githubusercontent.com/gaong5247-cmd/Stockless/$GITHUB_SHA/tools/sf19_50k.py"
+          python sf19_50k.py prepare --archive official-8moves.zip --output openings/starts.epd
+          sha256sum engines/stockless engines/stockfish19 > engines/sha256.txt
+          printf 'uci\nisready\nquit\n' | engines/stockless > engines/stockless-uci.txt
+          printf 'uci\nisready\nquit\n' | engines/stockfish19 > engines/stockfish19-uci.txt
+          grep -Fx 'id name Stockless v0.9.0' engines/stockless-uci.txt
+          grep -Fx readyok engines/stockfish19-uci.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sf19-50k-inputs
+          path: |
+            engines/
+            openings/
+            sf19_50k.py
+          retention-days: 30
+          if-no-files-found: error
+
+  match:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sf19-50k-inputs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify engines and install pinned Cute Chess CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install chess==1.11.2
+          chmod +x engines/stockless engines/stockfish19
+          sha256sum -c engines/sha256.txt
+          curl --fail --retry 3 -L -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          test -x squashfs-root/usr/bin/cutechess-cli
+          echo "CUTE=$PWD/squashfs-root/usr/bin/cutechess-cli" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - name: Play 250 games on 125 positions and verify color reversal
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          mkdir -p match/results
+          python sf19_50k.py split --book openings/starts.epd --shard "$SHARD" --output match/starts.epd
+          "$CUTE" \
+            -tournament gauntlet \
+            -engine name=Stockless cmd="$PWD/engines/stockless" \
+              option.Threads=1 option.Hash=64 "option.Move Overhead=10" \
+              option.StocklessHybrid=true option.StocklessAggression=145 \
+              option.StocklessThreats=true option.StocklessOverdrive=false option.StocklessMobile=false \
+            -engine name=Stockfish19 cmd="$PWD/engines/stockfish19" \
+              option.Threads=1 option.Hash=64 "option.Move Overhead=10" \
+            -each proto=uci tc=10+0.1 \
+            -rounds 125 -games 2 -repeat \
+            -openings file=match/starts.epd format=epd order=sequential \
+            -srand 20261026 -concurrency 1 -wait 10 \
+            -draw movenumber=40 movecount=8 score=8 \
+            -resign movecount=3 score=650 \
+            -pgnout match/match.pgn -ratinginterval 125 \
+            2>&1 | tee match/match.log
+          CANDIDATE_SHA=$(sha256sum engines/stockless | cut -d' ' -f1)
+          OPPONENT_SHA=$(sha256sum engines/stockfish19 | cut -d' ' -f1)
+          python sf19_50k.py validate --shard "$SHARD" \
+            --pgn match/match.pgn --starts match/starts.epd \
+            --out "match/results/summary-$SHARD.json" \
+            --candidate-sha256 "$CANDIDATE_SHA" --opponent-sha256 "$OPPONENT_SHA"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: sf19-50k-summary-${{ matrix.shard }}
+          path: match/results/summary-${{ matrix.shard }}.json
+          retention-days: 30
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sf19-50k-pgn-${{ matrix.shard }}
+          path: |
+            match/match.pgn
+            match/match.log
+            match/starts.epd
+          retention-days: 30
+          if-no-files-found: warn
+
+  report:
+    needs: [build, match]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sf19-50k-inputs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sf19-50k-summary-*
+          path: results
+          merge-multiple: true
+      - name: Aggregate ONLY after all 50000 games pass verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install chess==1.11.2
+          python sf19_50k.py aggregate --folder results --json report/results.json --markdown report/REPORT.md
+          cat report/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sf19-50k-final-report
+          path: report/
+          retention-days: 30
+          if-no-files-found: warn
