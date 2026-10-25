@@ -1,0 +1,8 @@
+Protocol: 20261025-long-replication-99
+One final independent longer-TC sample: exactly 8192 games at 5+0.05.
+Engine source and executable remain frozen at 1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46.
+Reuse exact binaries from Actions run 40153018357; no rebuild or parameter tuning.
+Fresh opening positions 5632 through 9727; 16 shards of 512 color-paired games.
+Require a positive lower bound of a two-sided 99% pair-level interval.
+Reuse the original passed 4096-game short stage; do not pool the previous longer-stage games.
+Preserve the original valid-but-not-approved report. Stop after this follow-up regardless of outcome.

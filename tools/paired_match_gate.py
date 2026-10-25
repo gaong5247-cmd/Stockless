@@ -18,6 +18,8 @@ Manifest schema 1:
       "min_elo": 0, "shards": [{"directory": "long-0", "games": 256}]}]}
   List ALL shards; the example above is abbreviated. Optional top-level
   candidate_binary_sha256/baseline_binary_sha256 pin already built binaries.
+  Each stage may set confidence_level to 0.95 (default) or 0.99. An optional
+  protocol_id is copied to the report to identify its predeclared protocol.
   mode=exploratory permits one stage and can NEVER approve a release.
 
 Each shard directory contains match.pgn, match.log, openings.epd and
@@ -29,7 +31,9 @@ The EPD file must have exactly games/2 unique positions. Use -repeat and
 -games N and -games 2 -rounds N/2 are supported. Do not use -recover.
 
 The report uses color-pair means as observations, reports pentanomial counts,
-and transforms a pair-level 95% score interval to logistic Elo. This is an
+and transforms the selected pair-level 95% or 99% score interval to logistic Elo.
+The score_ci95/elo_ci95 fields ALWAYS remain genuine 95% intervals; score_ci/
+elo_ci identify the selected confidence_level used for promotion. This is an
 approximate fixed-sample interval, not a universal engine rating or an
 official Fishtest SPRT. In the zero-variance case a bounded Hoeffding interval
 replaces the falsely certain normal interval. Promotion requires two or more
@@ -54,6 +58,7 @@ import chess
 import chess.pgn
 
 Z95 = statistics.NormalDist().inv_cdf(0.975)
+Z99 = statistics.NormalDist().inv_cdf(0.995)
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 FAULT = re.compile(
@@ -102,7 +107,14 @@ def elo(score: float) -> float | str:
     return 400 * math.log10(score / (1 - score))
 
 
-def paired_statistics(scores: list[float]) -> dict:
+def checked_confidence(value: float) -> float:
+    require(type(value) in (int, float) and value in (0.95, 0.99),
+            "confidence_level must be exactly 0.95 or 0.99")
+    return value
+
+
+def paired_statistics(scores: list[float], confidence_level: float = 0.95) -> dict:
+    confidence_level = checked_confidence(confidence_level)
     require(len(scores) >= 2 and len(scores) % 2 == 0, "Complete pairs are required")
     require(all(score in (0.0, 0.5, 1.0) for score in scores), "Invalid game score")
     pairs = [(scores[i] + scores[i + 1]) / 2 for i in range(0, len(scores), 2)]
@@ -110,19 +122,28 @@ def paired_statistics(scores: list[float]) -> dict:
     mean = statistics.mean(pairs)
     variance = statistics.variance(pairs) if n > 1 else 0.0
     se = math.sqrt(variance / n)
-    if variance == 0 or n == 1:
-        margin = math.sqrt(math.log(2 / 0.05) / (2 * n))
-        method = "pair-level bounded Hoeffding 95% CI (zero-variance fallback)"
-    else:
-        margin = Z95 * se
-        method = "fixed-sample pair-cluster 95% normal CI (approximate)"
-    low, high = max(0.0, mean - margin), min(1.0, mean + margin)
+    def interval(level: float) -> list[float]:
+        if variance == 0 or n == 1:
+            alpha = 0.05 if level == 0.95 else 0.01
+            margin = math.sqrt(math.log(2 / alpha) / (2 * n))
+        else:
+            margin = (Z95 if level == 0.95 else Z99) * se
+        return [max(0.0, mean - margin), min(1.0, mean + margin)]
+
+    ci95 = interval(0.95)
+    selected_ci = interval(confidence_level)
+    confidence_label = f"{100 * confidence_level:.0f}%"
+    method = (f"pair-level bounded Hoeffding {confidence_label} CI (zero-variance fallback)"
+              if variance == 0 or n == 1 else
+              f"fixed-sample pair-cluster {confidence_label} normal CI (approximate)")
     return {
         "games": len(scores), "pairs": n,
         "wins": scores.count(1.0), "draws": scores.count(0.5), "losses": scores.count(0.0),
         "pentanomial": [pairs.count(value) for value in (0.0, 0.25, 0.5, 0.75, 1.0)],
         "score": mean, "pair_sample_variance": variance, "score_se": se,
-        "score_ci95": [low, high], "elo": elo(mean), "elo_ci95": [elo(low), elo(high)],
+        "score_ci95": ci95, "elo": elo(mean), "elo_ci95": [elo(value) for value in ci95],
+        "confidence_level": confidence_level,
+        "score_ci": selected_ci, "elo_ci": [elo(value) for value in selected_ci],
         "method": method,
     }
 
@@ -328,12 +349,17 @@ def analyze_experiment(plan: dict, results: Path) -> dict:
     for name in ("candidate_build_profile", "baseline_build_profile"):
         if name in plan:
             report[name] = plan[name]
+    if "protocol_id" in plan:
+        require(isinstance(plan["protocol_id"], str) and bool(plan["protocol_id"].strip()),
+                "protocol_id must be a nonempty string")
+        report["protocol_id"] = plan["protocol_id"]
     for stage in plan["stages"]:
         name = stage.get("name")
         require(isinstance(name, str) and bool(name) and name not in stage_names, "Stage names must be unique")
         stage_names.add(name)
         time_controls.add(normalized_tc(stage.get("time_control")))
         minimum, threshold = stage.get("minimum_games"), stage.get("min_elo", 5.0)
+        confidence_level = checked_confidence(stage.get("confidence_level", 0.95))
         require(type(minimum) is int and minimum >= 2 and minimum % 2 == 0,
                 f"{name}: minimum_games must be a positive even integer")
         require(type(threshold) in (int, float) and math.isfinite(threshold) and threshold >= 0,
@@ -363,11 +389,12 @@ def analyze_experiment(plan: dict, results: Path) -> dict:
             scores.extend(shard_scores)
             shard_reports.append(item)
         require(len(scores) >= minimum, f"{name}: planned total below minimum_games")
-        stats = paired_statistics(scores)
+        stats = paired_statistics(scores, confidence_level=confidence_level)
         point_ok = stats["elo"] == "+inf" or (isinstance(stats["elo"], (int, float)) and stats["elo"] >= threshold)
-        passed = stats["pairs"] >= 30 and stats["score_ci95"][0] > 0.5 and point_ok
+        passed = stats["pairs"] >= 30 and stats["score_ci"][0] > 0.5 and point_ok
         report["stages"].append({"name": name, "time_control": stage["time_control"],
                                  "minimum_games": minimum, "min_elo": threshold,
+                                 "confidence_level": confidence_level,
                                  "passed": passed, "statistics": stats, "shards": shard_reports})
     is_confirmation = plan["mode"] == "confirmation"
     if is_confirmation:
@@ -398,18 +425,32 @@ def markdown_report(report: dict) -> str:
              f"Valid evidence: **{report['valid']}**", f"Release approved: **{report['approved']}**", "",
              report.get("reason", report.get("error", "")), ""]
     if report.get("valid"):
+        levels = []
+        for stage in report["stages"]:
+            stat = stage["statistics"]
+            level = checked_confidence(stage.get("confidence_level", stat.get("confidence_level", 0.95)))
+            require("confidence_level" not in stat or stat["confidence_level"] == level,
+                    "Stage and statistics confidence levels disagree")
+            require(level == 0.95 or "elo_ci" in stat,
+                    "A 99% report requires its selected Elo interval")
+            levels.append(level)
+        label_each_interval = any(level != 0.95 for level in levels)
+        interval_heading = "Pair Elo interval" if label_each_interval else "Pair 95% Elo interval"
         lines += [f"Candidate: `{report['candidate_sha']}`", f"Baseline: `{report['baseline_sha']}`", "",
-                  "| Stage | TC | Games | W/D/L | Score | Elo | Pair 95% Elo interval | Pass |",
+                  f"| Stage | TC | Games | W/D/L | Score | Elo | {interval_heading} | Pass |",
                   "|---|---|---:|---|---:|---:|---|---|"]
         if "candidate_build_profile" in report:
             lines[7:7] = [f"Build profiles: `{report['candidate_build_profile']}` versus "
                            f"`{report['baseline_build_profile']}`.", ""]
-        for stage in report["stages"]:
+        if "protocol_id" in report:
+            lines[7:7] = [f"Protocol: `{report['protocol_id']}`.", ""]
+        for stage, level in zip(report["stages"], levels):
             stat = stage["statistics"]
-            low, high = map(text_elo, stat["elo_ci95"])
+            low, high = map(text_elo, stat.get("elo_ci", stat["elo_ci95"]))
+            interval_label = f" ({100 * level:.0f}%)" if label_each_interval else ""
             lines.append(f"| {stage['name']} | {stage['time_control']} | {stat['games']} | "
                          f"{stat['wins']}/{stat['draws']}/{stat['losses']} | {100*stat['score']:.3f}% | "
-                         f"{text_elo(stat['elo'])} | [{low}, {high}] | {stage['passed']} |")
+                         f"{text_elo(stat['elo'])} | [{low}, {high}]{interval_label} | {stage['passed']} |")
         lines += ["", "## Statistical method", "", report["limitations"], ""]
         for stage in report["stages"]:
             stat = stage["statistics"]

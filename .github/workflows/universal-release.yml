@@ -18,6 +18,11 @@ on:
         type: boolean
         required: false
         default: false
+      tested_source_sha:
+        description: Frozen engine source for the separately declared 1f1 replication protocol
+        type: string
+        required: false
+        default: ''
   workflow_dispatch:
 
 concurrency:
@@ -27,6 +32,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  SOURCE_SHA: ${{ inputs.tested_source_sha || github.sha }}
+
 jobs:
   linux-x86_64:
     name: Linux x86-64 Universal (CPU dispatch)
@@ -35,6 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.SOURCE_SHA }}
           submodules: recursive
       - uses: actions/setup-python@v5
         with:
@@ -63,7 +72,7 @@ jobs:
       - name: Package Linux x86-64 Universal
         run: |
           python tools/package_release.py --platform linux-x86_64-universal \
-            --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
+            --binary build/stockless-src/src/stockless --source-sha "$SOURCE_SHA"
       - uses: actions/download-artifact@v4
         if: inputs.publish_validated == true
         with:
@@ -79,14 +88,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(cat validation-build/candidate-sha.txt)" = "$GITHUB_SHA"
+          test "$(cat validation-build/candidate-sha.txt)" = "$SOURCE_SHA"
           sha256sum -c validation-build/binary-sha256.txt
           python - <<'PY'
           import hashlib, json, os
           from pathlib import Path
           report = json.loads(Path('validation-evidence/validation-report/report.json').read_text())
           assert report['valid'] is True and report['approved'] is True
-          assert report['candidate_sha'] == os.environ['GITHUB_SHA']
+          assert report['candidate_sha'] == os.environ['SOURCE_SHA']
           assert report['candidate_build_profile'] == 'pgo-avx2'
           assert hashlib.sha256(Path('validation-build/candidate').read_bytes()).hexdigest() == report['candidate_binary_sha256']
           PY
@@ -100,7 +109,7 @@ jobs:
       - name: Package Linux AVX2 PGO
         run: |
           python tools/package_release.py --platform linux-x86_64-avx2-pgo \
-            --binary validation-build/candidate --source-sha "$GITHUB_SHA"
+            --binary validation-build/candidate --source-sha "$SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
           name: stockless-v0.9.0-linux-x86_64-universal
@@ -116,6 +125,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.SOURCE_SHA }}
           submodules: recursive
       - uses: actions/setup-python@v5
         with:
@@ -139,7 +149,7 @@ jobs:
       - name: Package Linux ARM64
         run: |
           python tools/package_release.py --platform linux-arm64-universal \
-            --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
+            --binary build/stockless-src/src/stockless --source-sha "$SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
           name: stockless-v0.9.0-linux-arm64-universal
@@ -153,6 +163,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.SOURCE_SHA }}
           submodules: recursive
       - uses: actions/setup-python@v5
         with:
@@ -193,7 +204,7 @@ jobs:
         shell: pwsh
         run: |
           python tools/package_release.py --platform windows-x86_64-universal `
-            --binary build/stockless-src/src/stockless.exe --source-sha "$env:GITHUB_SHA"
+            --binary build/stockless-src/src/stockless.exe --source-sha "$env:SOURCE_SHA"
       - name: Build Windows AVX2 reference and verified PGO companion
         shell: msys2 {0}
         run: |
@@ -215,7 +226,7 @@ jobs:
         shell: pwsh
         run: |
           python tools/package_release.py --platform windows-x86_64-avx2-pgo `
-            --binary build/stockless-src/src/stockless.exe --source-sha "$env:GITHUB_SHA"
+            --binary build/stockless-src/src/stockless.exe --source-sha "$env:SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
           name: stockless-v0.9.0-windows-x86_64-universal
@@ -243,6 +254,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.SOURCE_SHA }}
           submodules: recursive
       - uses: actions/setup-python@v5
         with:
@@ -278,7 +290,7 @@ jobs:
       - name: Package Android UCI engine
         run: |
           python tools/package_release.py --platform android-${{ matrix.abi }} \
-            --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
+            --binary build/stockless-src/src/stockless --source-sha "$SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
           name: stockless-v0.9.0-android-${{ matrix.abi }}
@@ -290,6 +302,8 @@ jobs:
     needs: [linux-x86_64, linux-arm64, windows-x86_64, android]
     if: >-
       inputs.publish_validated == true &&
+      (inputs.tested_source_sha == '' ||
+       inputs.tested_source_sha == '1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46') &&
       github.event_name != 'pull_request' &&
       github.ref == 'refs/heads/improvement/20261025-validated-search' &&
       github.repository == 'gaong5247-cmd/Stockless'
@@ -299,6 +313,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Release policy and notes belong to the current orchestration commit.
+          # The OS jobs above compile only the separately bound engine source.
+          ref: ${{ github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -316,18 +334,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          PRIOR_ARGS=()
+          if [[ -f validation-evidence/prior-report/prior-report.json ]]; then
+            PRIOR_ARGS+=(--prior-report validation-evidence/prior-report/prior-report.json)
+          fi
           python release/create_validation_notes.py \
             --report validation-evidence/validation-report/report.json \
             --summary validation-evidence/validation-report/report.md \
-            --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$SOURCE_SHA" --orchestrator-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" "${PRIOR_ARGS[@]}" \
             --output release-notes.md
           cp validation-evidence/validation-report/report.json release-assets/validation-report.json
           cp validation-evidence/validation-report/report.md release-assets/validation-report.md
+          if [[ -f validation-evidence/prior-report/prior-report.json ]]; then
+            cp validation-evidence/prior-report/prior-report.json release-assets/prior-report.json
+          fi
       - name: Verify all OS archives, UCI version, checksums and manifests
         shell: bash
         run: |
           set -euo pipefail
-          python tools/verify_release_assets.py release-assets --expected-commit "$GITHUB_SHA" \
+          python tools/verify_release_assets.py release-assets --expected-commit "$SOURCE_SHA" \
             --strength-report validation-evidence/validation-report/report.json
           (cd release-assets && sha256sum *.zip > SHA256SUMS.txt)
           cat release-assets/SHA256SUMS.txt
@@ -342,9 +368,13 @@ jobs:
             echo "Release $TAG already exists; refusing to overwrite a published release" >&2
             exit 1
           fi
+          PRIOR_ASSETS=()
+          if [[ -f release-assets/prior-report.json ]]; then
+            PRIOR_ASSETS+=(release-assets/prior-report.json)
+          fi
           gh release create "$TAG" release-assets/*.zip release-assets/SHA256SUMS.txt \
             release-assets/validation-report.json release-assets/validation-report.md \
-            --target "$GITHUB_SHA" \
+            "${PRIOR_ASSETS[@]}" --target "$SOURCE_SHA" \
             --title "Stockless v0.9.0 — AVX2 PGO and universal compatibility builds" \
             --notes-file release-notes.md \
             --latest

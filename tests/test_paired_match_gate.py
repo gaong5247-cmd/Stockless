@@ -16,7 +16,7 @@ import chess.pgn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from paired_match_gate import (  # noqa: E402
-    EvidenceError, Z95, analyze_experiment, opening_key, paired_statistics, sha256,
+    EvidenceError, Z95, analyze_experiment, markdown_report, opening_key, paired_statistics, sha256,
 )
 
 
@@ -93,6 +93,10 @@ def change_metadata(directory: Path, **changes: object) -> None:
 
 
 class PairStatisticsTests(unittest.TestCase):
+    # The mean is about 2.28 standard errors above .5: positive at 95%, but
+    # insufficient at 99%. This distinguishes the two actual acceptance rules.
+    BOUNDARY_SCORES = [1, 0.5] * 30 + [0, 0.5] * 15 + [0.5, 0.5] * 55
+
     def test_pairs_are_observations_not_individual_games(self) -> None:
         # Pair totals: 2, 0, 1. Mean per game=.5; pair sample variance=.25.
         stat = paired_statistics([1, 1, 0, 0, 1, 0])
@@ -117,6 +121,30 @@ class PairStatisticsTests(unittest.TestCase):
         self.assertIn("Hoeffding", stat["method"])
         self.assertLess(paired_statistics([1, 1] * 100)["score_ci95"][0], 1)
 
+    def test_99_percent_boundary_preserves_genuine_95_percent_fields(self) -> None:
+        ordinary = paired_statistics(self.BOUNDARY_SCORES)
+        strict = paired_statistics(self.BOUNDARY_SCORES, confidence_level=0.99)
+        self.assertGreater(ordinary["score_ci"][0], 0.5)
+        self.assertLess(strict["score_ci"][0], 0.5)
+        self.assertEqual(ordinary["score_ci95"], strict["score_ci95"])
+        self.assertEqual(ordinary["elo_ci95"], strict["elo_ci95"])
+        self.assertEqual(ordinary["score_ci"], ordinary["score_ci95"])
+        self.assertEqual(ordinary["elo_ci"], ordinary["elo_ci95"])
+        self.assertEqual(strict["confidence_level"], 0.99)
+        self.assertLess(strict["elo_ci"][0], strict["elo_ci95"][0])
+        self.assertGreater(strict["elo_ci"][1], strict["elo_ci95"][1])
+
+    def test_invalid_confidence_levels_fail_closed(self) -> None:
+        for level in (0.90, 0.96, 1, None, "0.99", math.nan, math.inf, True):
+            with self.subTest(level=level), self.assertRaisesRegex(EvidenceError, "confidence_level"):
+                paired_statistics(self.BOUNDARY_SCORES, confidence_level=level)
+
+    def test_zero_variance_99_percent_fallback_is_wider(self) -> None:
+        strict = paired_statistics([1, 0] * 100, confidence_level=0.99)
+        self.assertLess(strict["score_ci"][0], strict["score_ci95"][0])
+        self.assertGreater(strict["score_ci"][1], strict["score_ci95"][1])
+        self.assertIn("Hoeffding 99%", strict["method"])
+
 
 class EvidenceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -135,6 +163,16 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(report["stages"][0]["statistics"]["games"], 4)
         self.assertEqual(report["stages"][0]["statistics"]["score"], 0.5)
         self.assertEqual(report["unique_openings"], 2)
+
+    def test_stage_rejects_invalid_confidence_and_preserves_protocol(self) -> None:
+        self.plan["protocol_id"] = "predeclared-fixture-protocol"
+        report = analyze_experiment(self.plan, self.root)
+        self.assertEqual(report["protocol_id"], "predeclared-fixture-protocol")
+        self.assertEqual(report["stages"][0]["confidence_level"], 0.95)
+        self.assertIn("Protocol: `predeclared-fixture-protocol`", markdown_report(report))
+        self.plan["stages"][0]["confidence_level"] = 0.97
+        with self.assertRaisesRegex(EvidenceError, "confidence_level"):
+            analyze_experiment(self.plan, self.root)
 
     def test_missing_planned_shard_is_invalid_even_when_finished_shard_wins(self) -> None:
         self.plan["stages"][0]["shards"].append({"directory": "short-1", "games": 4})
@@ -208,6 +246,21 @@ class EvidenceTests(unittest.TestCase):
 
 
 class ConfirmationTests(unittest.TestCase):
+    def test_stage_gate_uses_selected_99_percent_interval(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scores = PairStatisticsTests.BOUNDARY_SCORES
+            plan = plan_for(games=len(scores))
+            write_shard(root, plan, 0, scores)
+            first = analyze_experiment(plan, root)
+            self.assertTrue(first["stages"][0]["passed"])
+            plan["stages"][0]["confidence_level"] = 0.99
+            strict = analyze_experiment(plan, root)
+            self.assertFalse(strict["stages"][0]["passed"])
+            self.assertEqual(strict["stages"][0]["confidence_level"], 0.99)
+            self.assertGreater(strict["stages"][0]["statistics"]["score_ci95"][0], 0.5)
+            self.assertLess(strict["stages"][0]["statistics"]["score_ci"][0], 0.5)
+
     def test_two_positive_stages_approve_but_negative_or_changed_binary_does_not(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -241,6 +294,55 @@ class ConfirmationTests(unittest.TestCase):
             write_shard(root, plan, 1, [1, 1, 1, 1], seed=2)
             with self.assertRaisesRegex(EvidenceError, "Repeated opening"):
                 analyze_experiment(plan, root)
+
+
+class ReportCompatibilityTests(unittest.TestCase):
+    def test_archived_95_percent_report_format_is_unchanged(self) -> None:
+        # An archived report has neither generic CI fields nor confidence_level.
+        report = {
+            "valid": True, "approved": False, "reason": "Legacy result.",
+            "candidate_sha": "candidate", "baseline_sha": "baseline", "limitations": "Legacy limits.",
+            "stages": [{"name": "short", "time_control": "2+0.02", "passed": False, "min_elo": 5,
+                        "statistics": {"games": 2, "wins": 0, "draws": 2, "losses": 0,
+                                       "score": 0.5, "elo": 0, "elo_ci95": [-1, 1], "pairs": 1,
+                                       "pentanomial": [0, 0, 1, 0, 0], "method": "Legacy 95% method"}}],
+        }
+        expected = (
+            "# Stockless paired strength gate\n\n"
+            "Valid evidence: **True**\nRelease approved: **False**\n\nLegacy result.\n\n"
+            "Candidate: `candidate`\nBaseline: `baseline`\n\n"
+            "| Stage | TC | Games | W/D/L | Score | Elo | Pair 95% Elo interval | Pass |\n"
+            "|---|---|---:|---|---:|---:|---|---|\n"
+            "| short | 2+0.02 | 2 | 0/2/0 | 50.000% | +0.00 | [-1.00, +1.00] | False |\n\n"
+            "## Statistical method\n\nLegacy limits.\n\n"
+            "- short: 1 pairs; pentanomial [0, 0, 1, 0, 0]; Legacy 95% method; point-Elo threshold +5.00.\n"
+        )
+        self.assertEqual(markdown_report(report), expected)
+
+    def test_mixed_confidence_report_labels_each_real_interval(self) -> None:
+        scores = PairStatisticsTests.BOUNDARY_SCORES
+        report = {
+            "valid": True, "approved": False, "reason": "Fixture result.",
+            "candidate_sha": "candidate", "baseline_sha": "baseline", "limitations": "Fixture limits.",
+            "stages": [
+                {"name": "short", "time_control": "2+0.02", "passed": True, "min_elo": 5,
+                 "confidence_level": 0.95, "statistics": paired_statistics(scores)},
+                {"name": "long-final", "time_control": "5+0.05", "passed": False, "min_elo": 0,
+                 "confidence_level": 0.99, "statistics": paired_statistics(scores, confidence_level=0.99)},
+            ],
+        }
+        rendered = markdown_report(report)
+        short_line = next(line for line in rendered.splitlines() if line.startswith("| short |"))
+        long_line = next(line for line in rendered.splitlines() if line.startswith("| long-final |"))
+        self.assertIn("(95%)", short_line)
+        self.assertIn("(99%)", long_line)
+        self.assertNotIn("Pair 95% Elo interval", rendered)
+        selected = report["stages"][1]["statistics"]["elo_ci"]
+        self.assertIn(f"[{selected[0]:+.2f}, {selected[1]:+.2f}] (99%)", long_line)
+        # Old 95% values must never be relabeled as 99% if selected data is absent.
+        del report["stages"][1]["statistics"]["elo_ci"]
+        with self.assertRaisesRegex(EvidenceError, "99% report requires"):
+            markdown_report(report)
 
 
 if __name__ == "__main__":

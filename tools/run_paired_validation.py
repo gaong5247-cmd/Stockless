@@ -28,11 +28,18 @@ BOOK_URL = f"https://raw.githubusercontent.com/official-stockfish/books/{BOOK_RE
 SEED = 20261025
 CANDIDATE_BUILD_PROFILE = "pgo-avx2"
 BASELINE_BUILD_PROFILE = "standard-avx2"
+REPLICATION_PROTOCOL = "20261025-long-replication-99"
+REPLICATION_SOURCE = "1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46"
+REPLICATION_BUILD_RUN = 40153018357
+REPLICATION_CANDIDATE_HASH = "8ad4d99da4c9976f4cfc77d59f948541be04bca3c756b2d12dca6505d6e906fc"
+REPLICATION_BASELINE_HASH = "20b9637fa30b90a63b76ebc0bd9ffec601d32b26161a6b86e032e4bf01aa7ba8"
+REPLICATION_POOL_HASH = "d4cbef1177e7293cc165931adedc0b100cc78b2fb85f35150cb70a38a0ab5465"
 # (games per shard, shard count, time control, first opening index)
 STAGES = {
     "screen": (512, 1, "1+0.01", 2816),
     "short": (512, 8, "2+0.02", 3072),
     "long": (256, 4, "5+0.05", 5120),
+    "long-final": (512, 16, "5+0.05", 5632),
 }
 
 
@@ -60,7 +67,8 @@ def prepare_book(output: Path) -> None:
         positions.setdefault(epd, epd)
     openings = sorted(positions)
     random.Random(SEED).shuffle(openings)
-    if len(openings) < 5632:
+    needed = max(offset + games * count // 2 for games, count, _, offset in STAGES.values())
+    if len(openings) < needed:
         raise RuntimeError(f"Insufficient unique positions: {len(openings)}")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(openings) + "\n", encoding="utf-8")
@@ -77,6 +85,10 @@ def prepare_book(output: Path) -> None:
 def make_plan(candidate_sha: str, mode: str, output: Path) -> None:
     if mode == "exploratory":
         names = ["screen"]
+    elif mode == "replication":
+        if candidate_sha != REPLICATION_SOURCE:
+            raise ValueError("The final replication must reuse the frozen source and executable")
+        names = ["short", "long-final"]
     else:
         names = ["short", "long"]
     stages = []
@@ -85,17 +97,29 @@ def make_plan(candidate_sha: str, mode: str, output: Path) -> None:
         stages.append({
             "name": name, "time_control": tc, "minimum_games": games * count,
             "min_elo": 5.0 if name == "short" else 0.0,
+            "confidence_level": 0.99 if name == "long-final" else 0.95,
             "shards": [{"directory": f"{name}-{index}", "games": games}
                        for index in range(count)],
         })
     plan = {
-        "schema": 1, "mode": mode,
+        "schema": 1, "mode": "confirmation" if mode == "replication" else mode,
         "candidate_name": "StocklessCandidate", "baseline_name": "StocklessBaseline",
         "candidate_sha": candidate_sha, "baseline_sha": BASELINE_SHA,
         "candidate_build_profile": CANDIDATE_BUILD_PROFILE,
         "baseline_build_profile": BASELINE_BUILD_PROFILE,
         "stages": stages,
     }
+    if mode == "replication":
+        plan.update({
+            "protocol_id": REPLICATION_PROTOCOL,
+            "candidate_binary_sha256": REPLICATION_CANDIDATE_HASH,
+            "baseline_binary_sha256": REPLICATION_BASELINE_HASH,
+            "build_run_id": REPLICATION_BUILD_RUN,
+            "prior_run_id": REPLICATION_BUILD_RUN,
+            "orchestrator_sha": os.environ.get("GITHUB_SHA", "local"),
+            "prior_report": "docs/validation/v0.9.0-pgo-20261025.json",
+            "stopping_rule": "Exactly one new fixed 8192-game longer-TC test; no further attempts.",
+        })
     output.write_text(json.dumps(plan, indent=2) + "\n")
 
 
@@ -105,6 +129,12 @@ def run_match(args: argparse.Namespace) -> None:
         raise ValueError("Invalid shard index")
     candidate = args.candidate.resolve(strict=True)
     baseline = args.baseline.resolve(strict=True)
+    if args.stage == "long-final":
+        if (args.candidate_sha != REPLICATION_SOURCE
+                or digest(candidate) != REPLICATION_CANDIDATE_HASH
+                or digest(baseline) != REPLICATION_BASELINE_HASH
+                or digest(args.book) != REPLICATION_POOL_HASH):
+            raise RuntimeError("Final replication source, binaries or opening pool differ from the frozen protocol")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     pool = args.book.read_text(encoding="utf-8").splitlines()
@@ -166,7 +196,7 @@ def main() -> None:
     book.add_argument("output", type=Path)
     plan = commands.add_parser("plan")
     plan.add_argument("--candidate-sha", required=True)
-    plan.add_argument("--mode", choices=["exploratory", "confirmation"], required=True)
+    plan.add_argument("--mode", choices=["exploratory", "confirmation", "replication"], required=True)
     plan.add_argument("--output", type=Path, required=True)
     run = commands.add_parser("run")
     run.add_argument("--stage", choices=STAGES, required=True)

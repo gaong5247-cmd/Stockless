@@ -1,0 +1,195 @@
+name: Stockless final independent longer-TC confirmation
+run-name: "Final 8192-game 99% confirmation of frozen 1f1a487 · ${{ github.sha }}"
+
+on:
+  push:
+    branches: [improvement/20261025-validated-search]
+    paths: [arena/VALIDATE_LONG_20261025]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: stockless-final-long-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TESTED_SOURCE_SHA: 1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install chess==1.11.2
+      - name: Check statistical, publication and runner regressions
+        run: |
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          python tests/test_cutechess_defaults.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-build
+          run-id: 40153018357
+          github-token: ${{ github.token }}
+          path: validation-build
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-evidence
+          run-id: 40153018357
+          github-token: ${{ github.token }}
+          path: prior-evidence
+      - name: Verify immutable binaries and preserve the rejected original experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/prepare_long_replication.py --build validation-build \
+            --prior-evidence prior-evidence --output short-reference | tee preparation-receipt.json
+          python tools/run_paired_validation.py plan --candidate-sha "$TESTED_SOURCE_SHA" \
+            --mode replication --output replication-plan.json
+          mkdir -p prior-report
+          cp prior-evidence/validation-report/report.json prior-report/prior-report.json
+          cp prior-evidence/validation-report/report.md prior-report/prior-report.md
+          cp preparation-receipt.json replication-plan.json prior-report/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-build
+          path: validation-build/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-short-reference
+          path: short-reference/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: replication-prior-evidence
+          path: prior-report/
+          if-no-files-found: error
+
+  final-long:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install chess==1.11.2
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-build
+          path: validation-build
+      - name: Install pinned CuteChess and restore executable permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o cutechess.AppImage https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage
+          chmod +x cutechess.AppImage validation-build/candidate validation-build/baseline
+          ./cutechess.AppImage --appimage-extract >/dev/null
+          echo "CUTECHESS=$PWD/squashfs-root/usr/bin/cutechess-cli" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
+      - name: Complete all 512 paired games without early success or tuning
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat validation-build/candidate-sha.txt)" = "$TESTED_SOURCE_SHA"
+          sha256sum -c validation-build/binary-sha256.txt
+          python tools/run_paired_validation.py run --stage long-final --shard '${{ matrix.shard }}' \
+            --candidate validation-build/candidate --baseline validation-build/baseline \
+            --candidate-sha "$TESTED_SOURCE_SHA" --cutechess "$CUTECHESS" \
+            --book validation-build/openings.epd --output 'results/long-final-${{ matrix.shard }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-final-long-${{ matrix.shard }}
+          path: results/
+          if-no-files-found: error
+
+  gate:
+    needs: [prepare, final-long]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      approved: ${{ steps.decision.outputs.approved }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install chess==1.11.2
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-short-reference
+          path: results
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: validation-final-long-*
+          path: results
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: replication-prior-evidence
+          path: prior-report
+      - name: Require the entire fresh sample and a positive 99% longer-TC interval
+        id: decision
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/run_paired_validation.py plan --candidate-sha "$TESTED_SOURCE_SHA" \
+            --mode replication --output replication-plan.json
+          cmp replication-plan.json prior-report/replication-plan.json
+          python tools/paired_match_gate.py --manifest replication-plan.json --results results --output validation-report
+          python - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          from paired_match_gate import markdown_report
+          path = Path('validation-report/report.json')
+          report = json.loads(path.read_text())
+          report['orchestrator_sha'] = os.environ['GITHUB_SHA']
+          report['prior_run_id'] = 40153018357
+          report['build_run_id'] = 40153018357
+          path.write_text(json.dumps(report, indent=2) + '\n')
+          Path('validation-report/report.md').write_text(markdown_report(report))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"approved={'true' if report['approved'] else 'false'}\n")
+          print(json.dumps(report, indent=2))
+          PY
+          cat validation-report/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-evidence
+          path: |
+            replication-plan.json
+            validation-report/
+            prior-report/prior-report.json
+            prior-report/prior-report.md
+            prior-report/preparation-receipt.json
+            results/
+          if-no-files-found: error
+
+  release:
+    needs: gate
+    if: needs.gate.outputs.approved == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/universal-release.yml
+    with:
+      publish_validated: true
+      tested_source_sha: 1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46
+    secrets: inherit
