@@ -25,6 +25,8 @@ def main() -> None:
     report = json.loads(args.report.read_text())
     if not (report.get("valid") is True and report.get("approved") is True
             and report.get("mode") == "confirmation"
+            and report.get("candidate_build_profile") == "pgo-avx2"
+            and report.get("baseline_build_profile") == "standard-avx2"
             and report.get("candidate_sha") == args.source_sha
             and report.get("baseline_sha") == BASELINE_SHA):
         raise RuntimeError("Release requires approved confirmation for this exact candidate and baseline")
@@ -34,7 +36,8 @@ def main() -> None:
         stats = stage.get("statistics", {})
         if not (stage.get("passed") is True and stage.get("time_control") == tc
                 and stats.get("games") == games and stats.get("pairs") == games // 2
-                and stats["score_ci95"][0] > 0.5 and stats["elo"] >= min_elo):
+                and stats["score_ci95"][0] > 0.5
+                and (stats["elo"] == "+inf" or stats["elo"] >= min_elo)):
             raise RuntimeError(f"Missing or insufficient predeclared {name} confirmation")
     if len(stages) != 2 or report.get("unique_openings") != 2560:
         raise RuntimeError("Unexpected confirmation stages or opening count")

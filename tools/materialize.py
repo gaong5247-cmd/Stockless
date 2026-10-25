@@ -253,6 +253,13 @@ def materialize(out: Path) -> None:
     replace_once(makefile, "\tEXE = stockfish.exe\n", "\tEXE = stockless.exe\n")
     replace_once(makefile, "\tEXE = stockfish.js\n", "\tEXE = stockless.js\n")
     replace_once(makefile, "\tEXE = stockfish\n", "\tEXE = stockless\n")
+    # Upstream objclean names its own executable explicitly. Clean the renamed
+    # Stockless binary too, including between PGO generation/use phases.
+    replace_once(
+        makefile,
+        "\t@rm -f stockfish stockfish.exe *.o",
+        "\t@rm -f $(EXE) stockless stockless.exe stockfish stockfish.exe *.o",
+    )
 
     marker = out / "STOCKLESS_MATERIALIZED.txt"
     marker.write_text(

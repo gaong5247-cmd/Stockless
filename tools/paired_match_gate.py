@@ -241,6 +241,9 @@ def analyze_shard(directory: Path, plan: dict, stage: dict, games: int) -> tuple
     require(metadata.get("schema") == 1, f"{directory}: unsupported metadata schema")
     for name in ("candidate_name", "baseline_name", "candidate_sha", "baseline_sha"):
         require(metadata.get(name) == plan[name], f"{directory}: mismatched {name}")
+    for name in ("candidate_build_profile", "baseline_build_profile"):
+        if name in plan:
+            require(metadata.get(name) == plan[name], f"{directory}: mismatched {name}")
     require(type(metadata.get("returncode")) is int and metadata["returncode"] == 0,
             f"{directory}: Cute Chess did not exit successfully")
     require(type(metadata.get("games")) is int and metadata["games"] == games,
@@ -322,6 +325,9 @@ def analyze_experiment(plan: dict, results: Path) -> dict:
               "candidate_name": plan["candidate_name"], "baseline_name": plan["baseline_name"],
               "candidate_sha": plan["candidate_sha"], "baseline_sha": plan["baseline_sha"],
               "generated_utc": datetime.now(timezone.utc).isoformat(), "stages": []}
+    for name in ("candidate_build_profile", "baseline_build_profile"):
+        if name in plan:
+            report[name] = plan[name]
     for stage in plan["stages"]:
         name = stage.get("name")
         require(isinstance(name, str) and bool(name) and name not in stage_names, "Stage names must be unique")
@@ -395,6 +401,9 @@ def markdown_report(report: dict) -> str:
         lines += [f"Candidate: `{report['candidate_sha']}`", f"Baseline: `{report['baseline_sha']}`", "",
                   "| Stage | TC | Games | W/D/L | Score | Elo | Pair 95% Elo interval | Pass |",
                   "|---|---|---:|---|---:|---:|---|---|"]
+        if "candidate_build_profile" in report:
+            lines[7:7] = [f"Build profiles: `{report['candidate_build_profile']}` versus "
+                           f"`{report['baseline_build_profile']}`.", ""]
         for stage in report["stages"]:
             stat = stage["statistics"]
             low, high = map(text_elo, stat["elo_ci95"])

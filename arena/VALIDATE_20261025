@@ -1,5 +1,7 @@
-Candidate: lean history removal, live-depth prepared policy, corrected pin direction, mobile Overdrive fix.
-Baseline: d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f (Stockless_v0.8.9).
-Screen: 512 games at 1+0.01. No promotion on screening results.
-Confirmation: fixed 4096 games at 2+0.02 and 1024 games at 5+0.05, disjoint openings.
-Publish only if both paired 95% confidence intervals are positive and all evidence/build checks pass.
+Candidate build: same corrected v0.9.0 source, now GCC AVX2 profile-build (PGO).
+Baseline: d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f, ordinary AVX2 build.
+Earlier ordinary candidate screen: 72W/354D/86L, 48.633%, NOT promoted; run40151375797.
+Fresh screen:512 games at1+0.01, opening offset2816.
+Fresh confirmation:4096 games at2+0.02 offset3072;1024 games at5+0.05 offset5120.
+Publish only if both paired95% confidence intervals are positive, evidence is complete and packages verified.
+The measured Linux PGO binary is packaged byte-for-byte; companion builds have no independent Elo claim.

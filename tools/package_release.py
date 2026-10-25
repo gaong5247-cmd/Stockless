@@ -16,6 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = {
+    "windows-x86_64-avx2-pgo": ("Windows 64-bit", "AVX2 required; profile-guided optimized build"),
+    "linux-x86_64-avx2-pgo": ("Linux 64-bit", "AVX2 required; profile-guided optimized build"),
     "windows-x86_64-universal": ("Windows 64-bit", "x86-64 to AVX-512 runtime dispatch"),
     "linux-x86_64-universal": ("Linux 64-bit", "x86-64 to AVX-512 runtime dispatch"),
     "linux-arm64-universal": ("Linux ARM64", "ARMv8/ARMv8-dotprod runtime dispatch"),
@@ -72,6 +74,7 @@ def main() -> None:
         "platform": args.platform,
         "platform_label": os_label,
         "cpu_dispatch": cpu,
+        "build_profile": "pgo" if args.platform.endswith("-pgo") else "standard-compatibility",
         "binary": name,
         "binary_sha256": sha256(binary_bytes),
         "source_commit": args.source_sha,
@@ -90,7 +93,8 @@ def main() -> None:
         "This is a native UCI engine, NOT an Android APK.\n\n"
         "The executable includes the Stockfish NNUE networks used by the pinned build.\n"
         "Default: Hybrid true; aggression 145; Threats true; Overdrive false.\n"
-        "No Elo increase relative to v0.7 is established merely by the new version.\n"
+        "Strength evidence applies only to the exact Linux AVX2 PGO binary in the release report.\n"
+        "Windows PGO is separately compiled; universal and Android builds are non-PGO compatibility builds.\n"
         f"Source commit: {args.source_sha}\n"
         f"Binary SHA-256: {manifest['binary_sha256']}\n"
     )

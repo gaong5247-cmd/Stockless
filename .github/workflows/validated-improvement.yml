@@ -1,5 +1,5 @@
-name: Stockless v0.9.0 independent strength validation
-run-name: "v0.9.0 fixed-baseline validation · ${{ github.sha }}"
+name: Stockless v0.9.0 PGO independent strength validation
+run-name: "v0.9.0 PGO fixed-baseline validation · ${{ github.sha }}"
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m unittest discover -s tests -p test_paired_match_gate.py -v
+          python -m unittest discover -s tests -p 'test_*.py' -v
           python tests/test_cutechess_defaults.py
           python tools/materialize.py
           c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/search_policy_test.cpp -o policy-test
@@ -41,12 +41,14 @@ jobs:
             build/stockless-src/src/position.cpp build/stockless-src/src/attacks.cpp \
             build/stockless-src/src/bitboard.cpp -o threat-test
           ./threat-test
-      - name: Build candidate and frozen v0.8.9 with identical compiler and ISA
+      - name: Build PGO candidate and ordinary frozen v0.8.9 with identical compiler and ISA
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p validation-build
-          make -C build/stockless-src/src -j4 build ARCH=x86-64-avx2
+          bash scripts/build-pgo.sh build/stockless-src/src x86-64-avx2 gcc 4
+          cp build/stockless-src/src/pgo-training.log validation-build/pgo-training.log
+          cp build/stockless-src/src/pgo-symbols.txt validation-build/pgo-symbols.txt
           cp build/stockless-src/src/stockless validation-build/candidate
           python tests/uci_lean_smoke.py validation-build/candidate
           BASE=d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f
@@ -144,7 +146,7 @@ jobs:
     timeout-minutes: 75
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 12
       matrix:
         include:
           - {stage: short, shard: 0}

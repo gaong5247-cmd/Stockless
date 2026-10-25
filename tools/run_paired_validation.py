@@ -26,11 +26,13 @@ BASELINE_SHA = "d2e165a6ab70a9a00e1d52ba2a0f4f678ffef22f"
 BOOK_REV = "a804a97e709f40aa75a00f9d19e84915b7a3a45c"
 BOOK_URL = f"https://raw.githubusercontent.com/official-stockfish/books/{BOOK_REV}/8moves_v3.pgn.zip"
 SEED = 20261025
+CANDIDATE_BUILD_PROFILE = "pgo-avx2"
+BASELINE_BUILD_PROFILE = "standard-avx2"
 # (games per shard, shard count, time control, first opening index)
 STAGES = {
-    "screen": (512, 1, "1+0.01", 0),
-    "short": (512, 8, "2+0.02", 256),
-    "long": (256, 4, "5+0.05", 2304),
+    "screen": (512, 1, "1+0.01", 2816),
+    "short": (512, 8, "2+0.02", 3072),
+    "long": (256, 4, "5+0.05", 5120),
 }
 
 
@@ -58,7 +60,7 @@ def prepare_book(output: Path) -> None:
         positions.setdefault(epd, epd)
     openings = sorted(positions)
     random.Random(SEED).shuffle(openings)
-    if len(openings) < 2816:
+    if len(openings) < 5632:
         raise RuntimeError(f"Insufficient unique positions: {len(openings)}")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(openings) + "\n", encoding="utf-8")
@@ -90,6 +92,8 @@ def make_plan(candidate_sha: str, mode: str, output: Path) -> None:
         "schema": 1, "mode": mode,
         "candidate_name": "StocklessCandidate", "baseline_name": "StocklessBaseline",
         "candidate_sha": candidate_sha, "baseline_sha": BASELINE_SHA,
+        "candidate_build_profile": CANDIDATE_BUILD_PROFILE,
+        "baseline_build_profile": BASELINE_BUILD_PROFILE,
         "stages": stages,
     }
     output.write_text(json.dumps(plan, indent=2) + "\n")
@@ -133,6 +137,8 @@ def run_match(args: argparse.Namespace) -> None:
         "candidate_binary_sha256": digest(candidate),
         "baseline_binary_sha256": digest(baseline), "command": command,
         "returncode": None, "stage": args.stage, "shard": args.shard,
+        "candidate_build_profile": CANDIDATE_BUILD_PROFILE,
+        "baseline_build_profile": BASELINE_BUILD_PROFILE,
         "runner": os.environ.get("RUNNER_NAME", "local"),
     }
     metadata_path = output / "metadata.json"

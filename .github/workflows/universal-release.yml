@@ -7,6 +7,9 @@ on:
       - "src/stockless/**"
       - "tools/materialize.py"
       - "tools/package_release.py"
+      - "tools/verify_release_assets.py"
+      - "scripts/build-pgo.sh"
+      - "release/create_validation_notes.py"
       - "engine-branding.json"
   workflow_call:
     inputs:
@@ -61,10 +64,49 @@ jobs:
         run: |
           python tools/package_release.py --platform linux-x86_64-universal \
             --binary build/stockless-src/src/stockless --source-sha "$GITHUB_SHA"
+      - uses: actions/download-artifact@v4
+        if: inputs.publish_validated == true
+        with:
+          name: validation-build
+          path: validation-build
+      - uses: actions/download-artifact@v4
+        if: inputs.publish_validated == true
+        with:
+          name: validation-evidence
+          path: validation-evidence
+      - name: Verify the exact strength-tested Linux PGO bytes
+        if: inputs.publish_validated == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat validation-build/candidate-sha.txt)" = "$GITHUB_SHA"
+          sha256sum -c validation-build/binary-sha256.txt
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          report = json.loads(Path('validation-evidence/validation-report/report.json').read_text())
+          assert report['valid'] is True and report['approved'] is True
+          assert report['candidate_sha'] == os.environ['GITHUB_SHA']
+          assert report['candidate_build_profile'] == 'pgo-avx2'
+          assert hashlib.sha256(Path('validation-build/candidate').read_bytes()).hexdigest() == report['candidate_binary_sha256']
+          PY
+      - name: Build a PGO development package when no strength publication was requested
+        if: inputs.publish_validated != true
+        shell: bash
+        run: |
+          bash scripts/build-pgo.sh build/stockless-src/src x86-64-avx2 gcc 4
+          mkdir -p validation-build
+          cp build/stockless-src/src/stockless validation-build/candidate
+      - name: Package Linux AVX2 PGO
+        run: |
+          python tools/package_release.py --platform linux-x86_64-avx2-pgo \
+            --binary validation-build/candidate --source-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         with:
           name: stockless-v0.9.0-linux-x86_64-universal
-          path: dist/Stockless-v0.9.0-linux-x86_64-universal.zip
+          path: |
+            dist/Stockless-v0.9.0-linux-x86_64-universal.zip
+            dist/Stockless-v0.9.0-linux-x86_64-avx2-pgo.zip
           if-no-files-found: error
 
   linux-arm64:
@@ -152,10 +194,34 @@ jobs:
         run: |
           python tools/package_release.py --platform windows-x86_64-universal `
             --binary build/stockless-src/src/stockless.exe --source-sha "$env:GITHUB_SHA"
+      - name: Build Windows AVX2 reference and verified PGO companion
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          make -C build/stockless-src/src objclean ARCH=x86-64-avx2 COMP=mingw
+          make -C build/stockless-src/src -j4 build ARCH=x86-64-avx2 COMP=mingw
+          cp build/stockless-src/src/stockless.exe windows-avx2-reference.exe
+          bash scripts/build-pgo.sh build/stockless-src/src x86-64-avx2 mingw 4
+      - name: Verify Windows PGO preserves same-source nodes and bestmoves
+        shell: pwsh
+        run: |
+          python tools/compare_bench.py ./windows-avx2-reference.exe ./build/stockless-src/src/stockless.exe --depth 11 --rounds 2
+          if ($LASTEXITCODE -ne 0) { throw "Windows PGO node comparison failed" }
+          python tools/compare_lean_policy_profiles.py ./windows-avx2-reference.exe ./build/stockless-src/src/stockless.exe --depth 8
+          if ($LASTEXITCODE -ne 0) { throw "Windows PGO bestmove/profile comparison failed" }
+          python tests/uci_lean_smoke.py ./build/stockless-src/src/stockless.exe
+          if ($LASTEXITCODE -ne 0) { throw "Windows PGO UCI search failed" }
+      - name: Package Windows AVX2 PGO
+        shell: pwsh
+        run: |
+          python tools/package_release.py --platform windows-x86_64-avx2-pgo `
+            --binary build/stockless-src/src/stockless.exe --source-sha "$env:GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         with:
           name: stockless-v0.9.0-windows-x86_64-universal
-          path: dist/Stockless-v0.9.0-windows-x86_64-universal.zip
+          path: |
+            dist/Stockless-v0.9.0-windows-x86_64-universal.zip
+            dist/Stockless-v0.9.0-windows-x86_64-avx2-pgo.zip
           if-no-files-found: error
 
   android:
@@ -261,7 +327,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/verify_release_assets.py release-assets --expected-commit "$GITHUB_SHA"
+          python tools/verify_release_assets.py release-assets --expected-commit "$GITHUB_SHA" \
+            --strength-report validation-evidence/validation-report/report.json
           (cd release-assets && sha256sum *.zip > SHA256SUMS.txt)
           cat release-assets/SHA256SUMS.txt
       - name: Publish GitHub Release (fail on existing tag)
@@ -278,7 +345,7 @@ jobs:
           gh release create "$TAG" release-assets/*.zip release-assets/SHA256SUMS.txt \
             release-assets/validation-report.json release-assets/validation-report.md \
             --target "$GITHUB_SHA" \
-            --title "Stockless v0.9.0 — Universal Windows, Linux & Android" \
+            --title "Stockless v0.9.0 — AVX2 PGO and universal compatibility builds" \
             --notes-file release-notes.md \
             --latest
           gh release view "$TAG" --json url,tagName,assets

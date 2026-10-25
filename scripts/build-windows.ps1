@@ -20,7 +20,11 @@ $Jobs = if ($env:STOCKLESS_JOBS) { [int]$env:STOCKLESS_JOBS } else { 2 }
 if ($Jobs -lt 1) { throw "STOCKLESS_JOBS must be positive" }
 
 Write-Host "[Stockless] Building ARCH=$Arch TARGET=$Target JOBS=$Jobs ..."
-make "-j$Jobs" $Target "ARCH=$Arch"
+if ($env:STOCKLESS_PGO -eq "1") {
+    bash (Join-Path $Root "scripts/build-pgo.sh") $EngineSrc $Arch "mingw" $Jobs
+} else {
+    make "-j$Jobs" $Target "ARCH=$Arch"
+}
 if ($LASTEXITCODE -ne 0) { throw "Stockless make $Target failed with $LASTEXITCODE" }
 
 Write-Host ""

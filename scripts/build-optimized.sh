@@ -24,6 +24,10 @@ esac
 git submodule update --init --recursive
 python3 tools/materialize.py
 echo "[Stockless] make $TARGET ARCH=$ARCH JOBS=$JOBS"
-make -C build/stockless-src/src "-j$JOBS" "$TARGET" "ARCH=$ARCH"
+if [ "$PGO" = 1 ]; then
+    bash scripts/build-pgo.sh build/stockless-src/src "$ARCH" gcc "$JOBS"
+else
+    make -C build/stockless-src/src "-j$JOBS" "$TARGET" "ARCH=$ARCH"
+fi
 echo "[Stockless] binary: build/stockless-src/src/stockless"
 echo "[Stockless] ARCH=native is host-specific. Use STOCKLESS_ARCH=x86-64-avx2 for portable AVX2."
