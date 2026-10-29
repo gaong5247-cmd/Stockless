@@ -72,7 +72,9 @@ std::string Network::stockless_training_features(
         << skip << ' ' << raw << ' ';
     for (int i = 0; i < 128; ++i) {
         if (i) out << ',';
-        out << int(joined[i]);
+        // Expose activations in the NNUE FILE's canonical FC2 weight order.
+        // SIMD/pair-activation builds permute FC2 weights when loading.
+        out << int(joined[decltype(n.fc_2)::get_weight_index(i)]);
     }
     return out.str();
 }
