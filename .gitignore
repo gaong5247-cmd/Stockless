@@ -5,3 +5,8 @@ networks/
 *.o
 __pycache__/
 *.py[cod]
+data/
+training_runs/
+*.pt
+*.bin
+*.sqlite3*
