@@ -15,6 +15,7 @@ import struct
 import subprocess
 from pathlib import Path
 
+from net_format import base_weights, read_net
 import chess
 
 RECORD = struct.Struct("<B128siiiifff")
@@ -93,6 +94,12 @@ def main():
     ap.add_argument("--max-records", type=int, default=0)
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
+    # Reject partial reruns rather than retaining an old de-duplication index.
+    existing = [args.out / n for n in ("train.bin", "val.bin", "test.bin", "dedup.sqlite3")]
+    if any(p.exists() for p in existing):
+        raise SystemExit("Output exists; choose a NEW --out directory to avoid inconsistent data")
+    read_net(args.net)
+    net_biases, net_weights = base_weights(args.net)
     dbpath = args.out / "dedup.sqlite3"
     db = sqlite3.connect(dbpath)
     db.execute("PRAGMA journal_mode=WAL")
@@ -135,6 +142,13 @@ def main():
                 n = int.from_bytes(h, "little") % 100
                 split = "test" if n < 5 else ("val" if n < 10 else "train")
                 bucket, features, psqt, skip, raw = probe.feature(row["fen"])
+                fwd = net_biases[bucket] + skip + sum(
+                    a * w for a, w in zip(features, net_weights[bucket]))
+                approx_raw = psqt / 16.0 + fwd * (600.0 / 16384.0)
+                if abs(approx_raw - raw) > 3.0:
+                    raise RuntimeError(
+                        f"NNUE format/probe mismatch: bucket={bucket} "
+                        f"native={raw} reconstructed={approx_raw:.2f}")
                 native_target = int(round(cp * win_rate_a(board) / 100.0))
                 attack = max(0., min(1., float(row["attack_pressure"]) - 0.65 * float(row["king_danger"])))
                 handles[split].write(RECORD.pack(
