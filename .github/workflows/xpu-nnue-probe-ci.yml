@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           cd build/stockless-src/src
-          printf 'uci\nisready\nposition startpos\nstockless_features\nquit\n' | ./stockfish | tee /tmp/stockless-probe.log
+          printf 'uci\nisready\nposition startpos\nstockless_features\nquit\n' | ./stockless | tee /tmp/stockless-probe.log
           grep -E '^stockless_features [0-7] ' /tmp/stockless-probe.log
           NET=$(find . -maxdepth 1 -name '*.nnue' | head -1)
           test -n "$NET"
@@ -48,5 +48,5 @@ jobs:
           weight[0][0] = max(-128, min(127, weight[0][0] + 1))
           write_final_layers(net, '/tmp/stockless-test.nnue', bias, weight)
           PY
-          printf 'uci\nsetoption name EvalFile value /tmp/stockless-test.nnue\nisready\nposition startpos\ngo depth 2\nwait\nquit\n' | ./stockfish | tee /tmp/stockless-newnet.log
+          printf 'uci\nsetoption name EvalFile value /tmp/stockless-test.nnue\nisready\nposition startpos\ngo depth 2\nwait\nquit\n' | ./stockless | tee /tmp/stockless-newnet.log
           grep 'NNUE evaluation using /tmp/stockless-test.nnue' /tmp/stockless-newnet.log
