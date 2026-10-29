@@ -38,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File tools/xpu_nnue/build_probe.ps1
 instrumented materialized source. The probe adds only a debug command and
 does **not** alter the original NNUE inference or compressed `.nnue` format.
 
-Check the probe manually (run the compiled `stockfish.exe` under
+Check the probe manually (run the compiled `stockless.exe` under
 `build/stockless-src/src`, or the binary name produced by your toolchain):
 
 ```
@@ -86,7 +86,7 @@ Important:
 Specify the same original NNUE file that the **instrumented STOCKLESS** loads:
 
 ```powershell
-python tools/xpu_nnue/prepare.py --csv data/stockless_teacher.csv --probe "build/stockless-src/src/stockfish.exe" --net "build/stockless-src/src/nn-134a887f4c8f.nnue" --out data/prepared
+python tools/xpu_nnue/prepare.py --csv data/stockless_teacher.csv --probe "build/stockless-src/src/stockless.exe" --net "build/stockless-src/src/nn-134a887f4c8f.nnue" --out data/prepared
 ```
 
 If your pinned build uses another default network, pass its real file path;
