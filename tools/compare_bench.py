@@ -71,11 +71,15 @@ def main() -> int:
 
     a_nodes = [t[0] for t in results[0]]
     b_nodes = [t[0] for t in results[1]]
-    if not args.allow_different_nodes and (
+    nodes_differ = (
         len(set(a_nodes)) != 1 or len(set(b_nodes)) != 1 or a_nodes[0] != b_nodes[0]
-    ):
+    )
+    if nodes_differ and not args.allow_different_nodes:
         print("FAIL: depth-limited searched node counts differ; inspect decisions before claiming a speed-only patch")
         return 1
+    if nodes_differ:
+        print("NOTE: search-node counts differ: this is NOT a semantics-preserving speed comparison.")
+        print("NPS can be misleading across different search trees; test strength using paired games.")
 
     speed_a = statistics.median(s for _, s in results[0])
     speed_b = statistics.median(s for _, s in results[1])
