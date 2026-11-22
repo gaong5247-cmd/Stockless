@@ -17,6 +17,10 @@ jobs:
           python-version: "3.12"
       - name: Materialize Stockless
         run: python tools/materialize.py
+      - name: Python regression suite
+        run: |
+          python -m pip install chess==1.11.2
+          python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Verify arena defaults and overrides
         run: python tests/test_cutechess_defaults.py
       - name: Verify v0.7 search policy decision equivalence
@@ -48,9 +52,10 @@ jobs:
       - name: Package Linux artifact
         shell: bash
         run: |
-          mkdir -p dist/linux
+          mkdir -p dist/linux/assets
           cp build/stockless-src/src/stockless dist/linux/stockless
           cp assets/stockless-logo.svg engine-branding.json LICENSE NOTICE.md dist/linux/
+          cp assets/stockless-logo.svg dist/linux/assets/
           cp docs/GUI_BRANDING.md dist/linux/
       - uses: actions/upload-artifact@v4
         with:
@@ -94,12 +99,18 @@ jobs:
           if ($uciText -notcontains $expectedIdentity) { throw "Incorrect UCI identity; expected $expectedIdentity. Actual: $uciText" }
           if ($uciText -notcontains "uciok" -or $uciText -notcontains "readyok") { throw "UCI startup failed" }
           if ($uciText -match "option name StocklessThreatHistory " -or $uciText -match "option name StocklessHistoryWeight ") { throw "Retired ThreatHistory options found" }
+      - name: Windows build failure regressions
+        shell: pwsh
+        run: ./tests/test_build_windows.ps1
+      - name: Windows UCI multi-search and thread smoke
+        run: python tests/uci_lean_smoke.py build/stockless-src/src/stockless.exe
       - name: Package Windows artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "dist/windows" | Out-Null
+          New-Item -ItemType Directory -Force "dist/windows/assets" | Out-Null
           Copy-Item "build/stockless-src/src/stockless.exe" "dist/windows/stockless.exe"
           Copy-Item "assets/stockless-logo.svg","engine-branding.json","LICENSE","NOTICE.md" "dist/windows/"
+          Copy-Item "assets/stockless-logo.svg" "dist/windows/assets/"
           Copy-Item "docs/GUI_BRANDING.md" "dist/windows/"
       - uses: actions/upload-artifact@v4
         with:

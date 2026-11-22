@@ -8,16 +8,14 @@ paired FastChess games with independent openings and time controls.
 from __future__ import annotations
 
 import argparse
-import re
 import statistics
 import subprocess
 from pathlib import Path
 
-COUNTS = re.compile(r"Nodes searched\s*:\s*([0-9]+)")
-NPS = re.compile(r"Nodes/second\s*:\s*([0-9]+)")
+from bench_output import BenchResult, default_bench_position_count, parse_bench
 
 
-def bench(binary: Path, depth: int, timeout: int) -> tuple[int, int]:
+def bench(binary: Path, depth: int, timeout: int) -> BenchResult:
     proc = subprocess.run(
         [str(binary), "bench", "16", "1", str(depth), "default", "depth"],
         cwd=binary.parent,
@@ -29,11 +27,10 @@ def bench(binary: Path, depth: int, timeout: int) -> tuple[int, int]:
         timeout=timeout,
         check=True,
     )
-    counts = COUNTS.findall(proc.stdout)
-    speeds = NPS.findall(proc.stdout)
-    if not counts or not speeds:
-        raise RuntimeError(f"No Stockfish bench summary from {binary}:\n{proc.stdout[-2000:]}")
-    return int(counts[-1]), int(speeds[-1])
+    try:
+        return parse_bench(proc.stdout, expected_positions=default_bench_position_count(), depth=depth)
+    except ValueError as exc:
+        raise RuntimeError(f"Invalid Stockfish bench from {binary}: {exc}\n{proc.stdout[-2000:]}") from exc
 
 
 def main() -> int:
@@ -52,33 +49,33 @@ def main() -> int:
         help="Optional performance gate, e.g. 0.98; avoid noisy single-run CI assertions",
     )
     args = parser.parse_args()
-    if args.rounds < 1 or args.depth < 1:
-        parser.error("--depth and --rounds must be positive")
+    if args.rounds < 1 or args.depth < 1 or args.timeout < 1:
+        parser.error("--depth, --rounds and --timeout must be positive")
 
     paths = [p.resolve(strict=True) for p in (args.baseline, args.candidate)]
     for p in paths:
         if not p.is_file():
             parser.error(f"Not a file: {p}")
 
-    results: list[list[tuple[int, int]]] = [[], []]
+    results: list[list[BenchResult]] = [[], []]
     for repetition in range(args.rounds):
         # Interleave AB / BA to reduce bias from warmup and thermal drift.
         for engine in ([0, 1] if repetition % 2 == 0 else [1, 0]):
-            count, speed = bench(paths[engine], args.depth, args.timeout)
-            results[engine].append((count, speed))
+            result = bench(paths[engine], args.depth, args.timeout)
+            results[engine].append(result)
             label = "baseline" if engine == 0 else "candidate"
-            print(f"round={repetition + 1} {label}: nodes={count} nps={speed:,}", flush=True)
+            print(f"round={repetition + 1} {label}: positions={len(result.positions)}"
+                  f" nodes={result.nodes} nps={result.nps:,}", flush=True)
 
-    a_nodes = [t[0] for t in results[0]]
-    b_nodes = [t[0] for t in results[1]]
-    if not args.allow_different_nodes and (
-        len(set(a_nodes)) != 1 or len(set(b_nodes)) != 1 or a_nodes[0] != b_nodes[0]
+    signature = results[0][0].positions
+    if not args.allow_different_nodes and any(
+        result.positions != signature for engine_results in results for result in engine_results
     ):
-        print("FAIL: depth-limited searched node counts differ; inspect decisions before claiming a speed-only patch")
+        print("FAIL: per-position nodes, scores, PVs or bestmoves differ; inspect decisions before claiming a speed-only patch")
         return 1
 
-    speed_a = statistics.median(s for _, s in results[0])
-    speed_b = statistics.median(s for _, s in results[1])
+    speed_a = statistics.median(result.nps for result in results[0])
+    speed_b = statistics.median(result.nps for result in results[1])
     ratio = speed_b / speed_a if speed_a > 0 else 0.0
     print(f"baseline median NPS={speed_a:,.0f}")
     print(f"candidate median NPS={speed_b:,.0f}")
