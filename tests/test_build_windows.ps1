@@ -31,9 +31,11 @@ exit /b %STOCKLESS_TEST_GIT_CODE%
 echo python>>"%STOCKLESS_TEST_CALLS%"
 exit /b %STOCKLESS_TEST_PYTHON_CODE%
 '@ | Set-Content (Join-Path $FakeBin "python.cmd") -Encoding ascii
+    # Put redirection before echo: bash's final jobs argument is numeric, so
+    # appending >> after %* would turn its trailing "2" into stderr redirection.
     @'
 @echo off
-echo make %*>>"%STOCKLESS_TEST_CALLS%"
+>>"%STOCKLESS_TEST_CALLS%" echo make %*
 if not "%STOCKLESS_TEST_MAKE_CODE%"=="0" exit /b %STOCKLESS_TEST_MAKE_CODE%
 if "%STOCKLESS_TEST_NO_BINARY%"=="1" exit /b 0
 echo built fixture>"%STOCKLESS_TEST_BINARY%"
@@ -41,7 +43,7 @@ exit /b 0
 '@ | Set-Content (Join-Path $FakeBin "make.cmd") -Encoding ascii
     @'
 @echo off
-echo bash %*>>"%STOCKLESS_TEST_CALLS%"
+>>"%STOCKLESS_TEST_CALLS%" echo bash %*
 exit /b %STOCKLESS_TEST_MAKE_CODE%
 '@ | Set-Content (Join-Path $FakeBin "bash.cmd") -Encoding ascii
 
@@ -82,6 +84,9 @@ exit /b %STOCKLESS_TEST_MAKE_CODE%
         if ((Get-Location).Path -ne $OriginalLocation) { throw "${Name}: caller working directory changed" }
         if ($Name -eq "successful build" -and ($Calls[-1] -notmatch "COMP=mingw")) {
             throw "The Windows build did not request the MinGW compiler profile"
+        }
+        if ($Pgo -eq "1" -and $Calls[-1] -notmatch ' mingw "?2"?\s*$') {
+            throw "The PGO helper arguments were not preserved, including the trailing jobs count"
         }
         Write-Host "PASS: $Name"
     }
