@@ -1,4 +1,4 @@
-name: Stockless v0.9.0 universal build and release
+name: Stockless universal builds and validated release
 
 on:
   pull_request:
@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: universal-v090-${{ github.ref }}
+  group: stockless-universal-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -36,7 +36,35 @@ env:
   SOURCE_SHA: ${{ inputs.tested_source_sha || github.sha }}
 
 jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read and cross-check the source version
+        id: version
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          from package_release import read_version
+          version = read_version()
+          branding = json.loads(Path('engine-branding.json').read_text())
+          assert branding['version'] == version
+          assert branding['match']['uci_id_name'] == f'Stockless {version}'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'version={version}\n')
+          PYCODE
   linux-x86_64:
+    needs: metadata
     name: Linux x86-64 Universal (CPU dispatch)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -62,7 +90,7 @@ jobs:
           test -x "$BIN"
           printf 'uci\nisready\nquit\n' | "$BIN" | tee linux-uci.txt
           EXPECTED=$(python -c "import sys;sys.path.insert(0,'tools');from package_release import read_version;print(read_version())")
-          test "$EXPECTED" = "v0.9.0"
+          test "$EXPECTED" = "${{ needs.metadata.outputs.version }}"
           grep -Fx "id name Stockless $EXPECTED" linux-uci.txt
           grep -qx 'uciok' linux-uci.txt
           grep -qx 'readyok' linux-uci.txt
@@ -103,7 +131,12 @@ jobs:
         if: inputs.publish_validated != true
         shell: bash
         run: |
+          make -C build/stockless-src/src objclean ARCH=x86-64-avx2 COMP=gcc
+          make -C build/stockless-src/src -j4 build ARCH=x86-64-avx2 COMP=gcc
+          cp build/stockless-src/src/stockless linux-avx2-reference
           bash scripts/build-pgo.sh build/stockless-src/src x86-64-avx2 gcc 4
+          python tools/compare_lean_policy_profiles.py ./linux-avx2-reference ./build/stockless-src/src/stockless --depth 9
+          python tests/uci_lean_smoke.py build/stockless-src/src/stockless
           mkdir -p validation-build
           cp build/stockless-src/src/stockless validation-build/candidate
       - name: Package Linux AVX2 PGO
@@ -112,13 +145,14 @@ jobs:
             --binary validation-build/candidate --source-sha "$SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.9.0-linux-x86_64-universal
+          name: stockless-${{ needs.metadata.outputs.version }}-linux-x86_64-universal
           path: |
-            dist/Stockless-v0.9.0-linux-x86_64-universal.zip
-            dist/Stockless-v0.9.0-linux-x86_64-avx2-pgo.zip
+            dist/Stockless-${{ needs.metadata.outputs.version }}-linux-x86_64-universal.zip
+            dist/Stockless-${{ needs.metadata.outputs.version }}-linux-x86_64-avx2-pgo.zip
           if-no-files-found: error
 
   linux-arm64:
+    needs: metadata
     name: Linux ARM64 Universal (NEON/DotProd dispatch)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
@@ -141,7 +175,7 @@ jobs:
           BIN=build/stockless-src/src/stockless
           printf 'uci\nisready\nquit\n' | "$BIN" | tee arm64-uci.txt
           EXPECTED=$(python -c "import sys;sys.path.insert(0,'tools');from package_release import read_version;print(read_version())")
-          test "$EXPECTED" = "v0.9.0"
+          test "$EXPECTED" = "${{ needs.metadata.outputs.version }}"
           grep -Fx "id name Stockless $EXPECTED" arm64-uci.txt
           grep -qx 'readyok' arm64-uci.txt
           "$BIN" bench 16 1 8 default depth 2>&1 | tee arm64-bench.txt
@@ -152,11 +186,12 @@ jobs:
             --binary build/stockless-src/src/stockless --source-sha "$SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.9.0-linux-arm64-universal
-          path: dist/Stockless-v0.9.0-linux-arm64-universal.zip
+          name: stockless-${{ needs.metadata.outputs.version }}-linux-arm64-universal
+          path: dist/Stockless-${{ needs.metadata.outputs.version }}-linux-arm64-universal.zip
           if-no-files-found: error
 
   windows-x86_64:
+    needs: metadata
     name: Windows x86-64 Universal (CPU dispatch)
     runs-on: windows-2022
     timeout-minutes: 150
@@ -192,7 +227,7 @@ jobs:
           $uci = @("uci", "isready", "quit") | & $bin
           if ($LASTEXITCODE -ne 0) { throw "UCI engine exited with $LASTEXITCODE" }
           $version = python -c "import sys;sys.path.insert(0,'tools');from package_release import read_version;print(read_version())"
-          if ($version -ne "v0.9.0") { throw "Unexpected release version: $version" }
+          if ($version -ne "${{ needs.metadata.outputs.version }}") { throw "Unexpected release version: $version" }
           if ($uci -notcontains "id name Stockless $version") { throw "Wrong UCI version: expected Stockless $version; got $uci" }
           if ($uci -notcontains "uciok" -or $uci -notcontains "readyok") { throw "UCI handshake failed" }
           & $bin bench 16 1 8 default depth 2>&1 | Tee-Object -FilePath windows-bench.txt
@@ -229,13 +264,14 @@ jobs:
             --binary build/stockless-src/src/stockless.exe --source-sha "$env:SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.9.0-windows-x86_64-universal
+          name: stockless-${{ needs.metadata.outputs.version }}-windows-x86_64-universal
           path: |
-            dist/Stockless-v0.9.0-windows-x86_64-universal.zip
-            dist/Stockless-v0.9.0-windows-x86_64-avx2-pgo.zip
+            dist/Stockless-${{ needs.metadata.outputs.version }}-windows-x86_64-universal.zip
+            dist/Stockless-${{ needs.metadata.outputs.version }}-windows-x86_64-avx2-pgo.zip
           if-no-files-found: error
 
   android:
+    needs: metadata
     name: Android ${{ matrix.abi }} (NDK API 26)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -293,8 +329,8 @@ jobs:
             --binary build/stockless-src/src/stockless --source-sha "$SOURCE_SHA"
       - uses: actions/upload-artifact@v4
         with:
-          name: stockless-v0.9.0-android-${{ matrix.abi }}
-          path: dist/Stockless-v0.9.0-android-${{ matrix.abi }}.zip
+          name: stockless-${{ needs.metadata.outputs.version }}-android-${{ matrix.abi }}
+          path: dist/Stockless-${{ needs.metadata.outputs.version }}-android-${{ matrix.abi }}.zip
           if-no-files-found: error
 
   publish:

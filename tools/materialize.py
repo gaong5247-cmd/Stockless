@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,8 +15,10 @@ DEFAULT_OUT = ROOT / "build" / "stockless-src"
 
 STOCKFISH_SHA = "0a215d6c9e48856ef630013b8ab8312941a59057"
 RECKLESS_SHA = "7300f044812d80397960e3a27a4f085e9487419a"
+MATERIALIZED_MARKER = "STOCKLESS_MATERIALIZED.txt"
+
+
 def stockless_version() -> str:
-    import re
     source = (OVERLAY / "config.h").read_text(encoding="utf-8")
     match = re.search(r'inline constexpr const char\* Version = "([^"]+)";', source)
     if not match:
@@ -48,8 +51,67 @@ def verify_pin(path: Path, expected: str, label: str) -> None:
             "Update docs/UPSTREAM.md and patch anchors before changing the pin."
         )
 
+    # HEAD alone does not identify the copied sources: both staged and unstaged
+    # changes would otherwise be built under the clean upstream commit's name.
+    # Ignore untracked files so downloaded NNUEs and local build outputs remain
+    # usable; tracked changes in any nested submodule still count as dirty.
+    result = subprocess.run(
+        ["git", "-C", str(path), "status", "--porcelain=v1",
+         "--untracked-files=no", "--ignore-submodules=untracked"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Could not verify {label} working tree: {result.stderr.strip()}")
+    if result.stdout:
+        raise RuntimeError(
+            f"{label} has modified tracked files at pinned {expected}. "
+            "Restore or commit those changes before materializing; a release "
+            "must use the recorded upstream sources."
+        )
+
+
+def validate_output_path(out: Path) -> Path:
+    """Allow disposable build trees without deleting source or unrelated data."""
+    # Check the supplied path before resolving it: resolving an output symlink
+    # first would turn rmtree into deletion of its target rather than the link.
+    if out.is_symlink():
+        raise ValueError(f"Output must not be a symlink: {out}")
+
+    out = out.resolve()
+    root = ROOT.resolve()
+    build = root / "build"
+    if out == root or out in root.parents:
+        raise ValueError(f"Output must not contain the Stockless repository: {out}")
+    if out.is_relative_to(root) and (out == build or not out.is_relative_to(build)):
+        raise ValueError(
+            f"Output inside the repository must be a directory below {build}; "
+            f"source directories are protected: {out}"
+        )
+
+    if out.exists():
+        if not out.is_dir():
+            raise ValueError(f"Output exists and is not a directory: {out}")
+        if (out / ".git").exists() or (out / ".git").is_symlink():
+            raise ValueError(f"Output contains a Git repository: {out}")
+        if any(out.iterdir()):
+            marker = out / MATERIALIZED_MARKER
+            signature = (
+                r"Stockless: [^\r\n]+\n"
+                r"Stockfish: [0-9a-f]{40}\n"
+                r"Reckless reference: [0-9a-f]{40}\n?"
+            )
+            if (marker.is_symlink() or not marker.is_file()
+                    or not re.fullmatch(signature, marker.read_text(encoding="utf-8"))):
+                raise ValueError(
+                    f"Refusing to replace a nonempty directory without a valid "
+                    f"{MATERIALIZED_MARKER}: {out}. Choose a new output directory "
+                    "or explicitly remove the old generated tree."
+                )
+    return out
+
 
 def materialize(out: Path) -> None:
+    out = validate_output_path(out)
     ensure_submodules()
     verify_pin(UPSTREAM, STOCKFISH_SHA, "Stockfish")
     verify_pin(RECKLESS, RECKLESS_SHA, "Reckless")
@@ -261,7 +323,7 @@ def materialize(out: Path) -> None:
         "\t@rm -f $(EXE) stockless stockless.exe stockfish stockfish.exe *.o",
     )
 
-    marker = out / "STOCKLESS_MATERIALIZED.txt"
+    marker = out / MATERIALIZED_MARKER
     marker.write_text(
         f"Stockless: {STOCKLESS_VERSION}\n"
         f"Stockfish: {STOCKFISH_SHA}\n"
@@ -274,7 +336,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
-    materialize(args.out.resolve())
+    materialize(args.out)
     print(args.out.resolve())
 
 

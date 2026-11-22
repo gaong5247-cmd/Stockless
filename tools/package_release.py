@@ -93,8 +93,10 @@ def main() -> None:
         "This is a native UCI engine, NOT an Android APK.\n\n"
         "The executable includes the Stockfish NNUE networks used by the pinned build.\n"
         "Default: Hybrid true; aggression 145; Threats true; Overdrive false.\n"
-        "Strength evidence applies only to the exact Linux AVX2 PGO binary in the release report.\n"
-        "Windows PGO is separately compiled; universal and Android builds are non-PGO compatibility builds.\n"
+        "Check this release's validation report for the tested binaries and configurations.\n"
+        "Results from an earlier release do not establish the strength of this executable.\n"
+        "PGO describes the build method; it does not by itself establish an Elo improvement.\n"
+        "Universal and Android packages are non-PGO compatibility builds.\n"
         f"Source commit: {args.source_sha}\n"
         f"Binary SHA-256: {manifest['binary_sha256']}\n"
     )
@@ -104,7 +106,10 @@ def main() -> None:
         "NOTICE.md": (ROOT / "NOTICE.md").read_bytes(),
         "UPSTREAM.md": (ROOT / "docs/UPSTREAM.md").read_bytes(),
         "engine-branding.json": (ROOT / "engine-branding.json").read_bytes(),
+        # Keep the old root-level copy for GUIs that already use it, and also
+        # ship the relative path advertised by engine-branding.json.
         "stockless-logo.svg": (ROOT / "assets/stockless-logo.svg").read_bytes(),
+        "assets/stockless-logo.svg": (ROOT / "assets/stockless-logo.svg").read_bytes(),
         "README.txt": instructions.encode("utf-8"),
         "manifest.json": (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
     }

@@ -8,15 +8,13 @@ This is a correctness gate, NOT an Elo or speed claim.
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 from pathlib import Path
 
-NODES = re.compile(r"Nodes searched\s*:\s*(\d+)")
-BESTMOVE = re.compile(r"\bbestmove\s+(\S+)")
+from bench_output import BenchResult, default_bench_position_count, parse_bench
 
 # Cover every supported lean Stockless mode; retired history options must not be sent.
-# The mobile+Overdrive combination preserves its v0.8.9 behavior here.
+# Include mobile+Overdrive to cover the mobile restriction.
 PROFILES = {
     "stockless-default": {},
     "hybrid-off": {"StocklessHybrid": "false"},
@@ -39,7 +37,7 @@ DEFAULT_OPTIONS = {
 }
 
 
-def bench(binary: Path, profile: dict[str, str], depth: int, timeout: int) -> tuple[int, tuple[str, ...]]:
+def bench(binary: Path, profile: dict[str, str], depth: int, timeout: int) -> BenchResult:
     options = {**DEFAULT_OPTIONS, **profile}
     commands = [f"setoption name {name} value {value}" for name, value in options.items()]
     commands += ["isready", f"bench 16 1 {depth} default depth", "quit", ""]
@@ -55,10 +53,10 @@ def bench(binary: Path, profile: dict[str, str], depth: int, timeout: int) -> tu
         timeout=timeout,
         check=True,
     )
-    nodes = NODES.findall(proc.stdout)
-    if not nodes:
-        raise ValueError(f"{binary}: missing bench node count\n{proc.stdout[-2000:]}")
-    return int(nodes[-1]), tuple(BESTMOVE.findall(proc.stdout))
+    try:
+        return parse_bench(proc.stdout, expected_positions=default_bench_position_count(), depth=depth)
+    except ValueError as exc:
+        raise ValueError(f"{binary}: invalid bench: {exc}\n{proc.stdout[-2000:]}") from exc
 
 
 def main() -> int:
@@ -75,12 +73,12 @@ def main() -> int:
     ]
     problems = []
     for name, options in PROFILES.items():
-        a_nodes, a_moves = bench(baseline, options, args.depth, args.timeout)
-        b_nodes, b_moves = bench(candidate, options, args.depth, args.timeout)
-        equivalent = a_nodes == b_nodes and a_moves == b_moves
+        a = bench(baseline, options, args.depth, args.timeout)
+        b = bench(candidate, options, args.depth, args.timeout)
+        equivalent = a.positions == b.positions
         print(
-            f"{name}: baseline={a_nodes:,} candidate={b_nodes:,}"
-            f" bestmoves={len(a_moves)}/{len(b_moves)}"
+            f"{name}: baseline={a.nodes:,} candidate={b.nodes:,}"
+            f" positions={len(a.positions)}/{len(b.positions)}"
             f" {'PASS' if equivalent else 'FAIL'}",
             flush=True,
         )
@@ -89,7 +87,7 @@ def main() -> int:
     if problems:
         print(f"FAIL: search decisions differ in {', '.join(problems)}")
         return 1
-    print(f"PASS: {len(PROFILES)} UCI profiles preserve nodes and PV move signatures")
+    print(f"PASS: {len(PROFILES)} UCI profiles preserve per-position nodes, scores, PVs and bestmoves")
     print("This is a semantics check. NPS and Elo must be evaluated separately.")
     return 0
 

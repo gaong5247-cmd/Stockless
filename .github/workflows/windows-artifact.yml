@@ -20,6 +20,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Verify Windows build failure handling
+        shell: pwsh
+        run: ./tests/test_build_windows.ps1
+
+      - name: Read source version
+        id: version
+        shell: pwsh
+        run: |
+          $version = python -c "import sys;sys.path.insert(0,'tools');from package_release import read_version;print(read_version())"
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read Stockless source version" }
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "STOCKLESS_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Materialize Stockless
         run: python tools/materialize.py
 
@@ -37,57 +50,57 @@ jobs:
         run: |
           make -C build/stockless-src/src -j2 build ARCH=x86-64-avx2 COMP=mingw
           mkdir -p dist
-          cp build/stockless-src/src/stockless.exe dist/stockless-v0.7.1-windows-avx2.exe
+          cp build/stockless-src/src/stockless.exe "dist/stockless-${STOCKLESS_VERSION}-windows-avx2.exe"
 
       - name: Build portable x86-64
         shell: msys2 {0}
         run: |
           make -C build/stockless-src/src clean
           make -C build/stockless-src/src -j2 build ARCH=x86-64 COMP=mingw
-          cp build/stockless-src/src/stockless.exe dist/stockless-v0.7.1-windows-x86-64.exe
+          cp build/stockless-src/src/stockless.exe "dist/stockless-${STOCKLESS_VERSION}-windows-x86-64.exe"
 
-      - name: UCI smoke test
+      - name: Verify UCI identity and real searches in both executables
         shell: pwsh
         run: |
-          $cmds = "uci`nsetoption name StocklessHybrid value true`nsetoption name StocklessAggression value 145`nsetoption name StocklessThreats value true`nsetoption name StocklessOverdrive value true`nisready`nquit`n"
-          $cmds | & ".\dist\stockless-v0.7.1-windows-avx2.exe" | Tee-Object -FilePath ".\dist\uci-smoke.txt"
-          $text = Get-Content ".\dist\uci-smoke.txt" -Raw
-          if ($text -notmatch "(?m)^id name Stockless v0[.]7[.]1\r?$") { throw "wrong engine id" }
-          if ($text -notmatch "option name StocklessAggression type spin default 145") { throw "wrong aggression default" }
-          if ($text -match "option name StocklessThreatHistory " -or $text -match "option name StocklessHistoryWeight ") { throw "retired history options must be absent in lean branch" }
-          if ($text -notmatch "uciok") { throw "uci failed" }
-          if ($text -notmatch "readyok") { throw "isready failed" }
+          foreach ($arch in @("avx2", "x86-64")) {
+            $binary = "dist/stockless-$env:STOCKLESS_VERSION-windows-$arch.exe"
+            if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Missing $binary" }
+            python tests/uci_lean_smoke.py $binary | Tee-Object -FilePath "dist/uci-smoke-$arch.txt"
+            if ($LASTEXITCODE -ne 0) { throw "UCI search regression failed for $arch with $LASTEXITCODE" }
+          }
 
       - name: Package
         shell: pwsh
         run: |
           Copy-Item LICENSE dist\LICENSE.txt
           Copy-Item NOTICE.md dist\NOTICE.md
-          @'
-          Stockless v0.7.1 - Windows
+          @"
+          Stockless $env:STOCKLESS_VERSION - Windows
 
           Included:
-          - stockless-v0.7.1-windows-avx2.exe       Recommended on modern CPUs with AVX2
-          - stockless-v0.7.1-windows-x86-64.exe     More compatible fallback
+          - stockless-$env:STOCKLESS_VERSION-windows-avx2.exe       Requires an AVX2-capable CPU
+          - stockless-$env:STOCKLESS_VERSION-windows-x86-64.exe     Compatible x86-64 fallback
 
-          Current stable defaults:
+          Default UCI settings:
           StocklessHybrid = true
           StocklessAggression = 145
           StocklessThreats = true
           StocklessOverdrive = false
           StocklessMobile = false
 
-          # Lean variant removes the experimental ThreatHistory options entirely.
-
-          The v0.7 ON/OFF tournament did not prove a gain from enabling history,
-          so it remains OFF by default. StocklessOverdrive is also OFF.
+          The experimental StocklessThreatHistory and StocklessHistoryWeight options
+          have been removed. Delete them from saved GUI configurations.
 
           UCI engine: add the .exe to your chess GUI and edit the UCI options there.
-          '@ | Set-Content -Encoding UTF8 dist\README-WINDOWS.txt
+          The default NNUE networks are embedded; no separate network download is needed.
+          Both binaries passed UCI startup, multiple searches and thread-option checks.
+          These are ordinary builds. Their playing strength has not been independently measured.
+          Source commit: $env:GITHUB_SHA
+          "@ | Set-Content -Encoding UTF8 dist\README-WINDOWS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Stockless-v0.7.1-Windows
+          name: Stockless-${{ steps.version.outputs.value }}-Windows
           path: dist/
           if-no-files-found: error
           retention-days: 90

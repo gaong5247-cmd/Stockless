@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "kind": "maintenance",
+  "version": "v0.9.1",
+  "tag": "Stockless_v0.9.1",
+  "baseline_tag": "Stockless_v0.9.0",
+  "baseline_commit": "1f1a4870fb02cc6cd04d52e2e082ef72aed0ff46",
+  "notes": "docs/RELEASE_v0.9.1.md",
+  "playing_strength_claim": false
+}

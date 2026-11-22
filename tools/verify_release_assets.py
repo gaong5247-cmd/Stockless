@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from package_release import PLATFORMS, read_version
 
@@ -18,6 +18,45 @@ STRENGTH_PLATFORM = "linux-x86_64-avx2-pgo"
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def verify_package(path: Path, version: str, platform: str,
+                   expected_commit: str | None = None) -> None:
+    """Validate one package, including the assets referenced by its branding."""
+    with zipfile.ZipFile(path, "r") as archive:
+        if archive.testzip() is not None:
+            raise RuntimeError(f"Corrupt ZIP: {path}")
+        names = archive.namelist()
+        if len(names) != len(set(names)):
+            raise RuntimeError(f"Duplicate ZIP entries: {path}")
+        for name in REQUIRED:
+            if name not in names:
+                raise RuntimeError(f"{path}: missing {name}")
+        manifest = json.loads(archive.read("manifest.json"))
+        if (manifest.get("platform") != platform or manifest.get("version") != version
+                or manifest.get("uci_id_name") != f"Stockless {version}"):
+            raise RuntimeError(f"Version/platform mismatch: {path}")
+        if expected_commit is not None and manifest.get("source_commit") != expected_commit:
+            raise RuntimeError(f"Wrong source commit in {path}")
+        executable = manifest.get("binary")
+        if executable not in names or archive.getinfo(executable).file_size == 0:
+            raise RuntimeError(f"{path}: binary missing/empty")
+        if digest(archive.read(executable)) != manifest.get("binary_sha256"):
+            raise RuntimeError(f"{path}: failed binary SHA-256 check")
+        branding = json.loads(archive.read("engine-branding.json"))
+        if (branding.get("version") != version
+                or branding.get("match", {}).get("uci_id_name") != f"Stockless {version}"):
+            raise RuntimeError(f"{path}: branding mismatch")
+        for field in ("logo", "icon"):
+            reference = branding.get("branding", {}).get(field)
+            if not isinstance(reference, str) or not reference:
+                raise RuntimeError(f"{path}: missing branding {field} reference")
+            member = PurePosixPath(reference)
+            if (member.is_absolute() or ".." in member.parts or "\\" in reference
+                    or reference not in names or archive.getinfo(reference).file_size == 0):
+                raise RuntimeError(f"{path}: branding {field} does not resolve to a bundled asset")
+        if not executable.endswith(".exe") and not (archive.getinfo(executable).external_attr >> 16 & 0o111):
+            raise RuntimeError(f"{path}: non-Windows binary is not executable")
 
 
 def verify_strength_identity(package: Path, report: dict, expected_commit: str | None) -> None:
@@ -66,30 +105,7 @@ def main() -> None:
 
     for platform in sorted(PLATFORMS):
         path = args.directory / f"Stockless-{version}-{platform}.zip"
-        with zipfile.ZipFile(path, "r") as archive:
-            if archive.testzip() is not None:
-                raise RuntimeError(f"Corrupt ZIP: {path}")
-            names = archive.namelist()
-            if len(names) != len(set(names)):
-                raise RuntimeError(f"Duplicate ZIP entries: {path}")
-            manifest = json.loads(archive.read("manifest.json"))
-            if manifest["platform"] != platform or manifest["uci_id_name"] != f"Stockless {version}":
-                raise RuntimeError(f"Version/platform mismatch: {path}")
-            if args.expected_commit is not None and manifest["source_commit"] != args.expected_commit:
-                raise RuntimeError(f"Wrong source commit in {path}")
-            for name in REQUIRED:
-                if name not in names:
-                    raise RuntimeError(f"{path}: missing {name}")
-            executable = manifest["binary"]
-            if executable not in names or archive.getinfo(executable).file_size == 0:
-                raise RuntimeError(f"{path}: binary missing/empty")
-            if digest(archive.read(executable)) != manifest["binary_sha256"]:
-                raise RuntimeError(f"{path}: failed binary SHA-256 check")
-            branding = json.loads(archive.read("engine-branding.json"))
-            if branding.get("version") != version or branding.get("match", {}).get("uci_id_name") != f"Stockless {version}":
-                raise RuntimeError(f"{path}: branding mismatch")
-            if not executable.endswith(".exe") and not (archive.getinfo(executable).external_attr >> 16 & 0o111):
-                raise RuntimeError(f"{path}: non-Windows binary is not executable")
+        verify_package(path, version, platform, args.expected_commit)
         print(f"PASS {path.name} ({path.stat().st_size:,} bytes)")
 
     if args.strength_report is not None:

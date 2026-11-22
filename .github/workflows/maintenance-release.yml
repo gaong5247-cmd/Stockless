@@ -1,0 +1,188 @@
+name: Stockless maintenance release
+run-name: "Maintenance verification and packages · ${{ github.sha }}"
+
+on:
+  pull_request:
+    paths:
+      - release/maintenance.json
+      - .github/workflows/maintenance-release.yml
+      - tools/verify_maintenance_release.py
+  push:
+    branches: [main]
+    paths: [release/maintenance.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stockless-maintenance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read the frozen baseline
+        id: plan
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          plan = json.loads(Path('release/maintenance.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"baseline={plan['baseline_commit']}\n")
+              output.write(f"version={plan['version']}\n")
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.plan.outputs.baseline }}
+          path: build/maintenance-baseline
+          submodules: recursive
+      - name: Verify Python regressions and prepare both sources
+        run: |
+          python -m pip install chess==1.11.2
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          python tests/test_cutechess_defaults.py
+          python tools/materialize.py
+          (cd build/maintenance-baseline && python tools/materialize.py)
+      - name: Require identical runtime sources and build flags
+        run: |
+          python tools/verify_maintenance_release.py \
+            --baseline build/maintenance-baseline --expected-commit "$GITHUB_SHA" \
+            --output build/maintenance-evidence/maintenance-report.json
+      - name: Check search policy and real-position threat regressions
+        run: |
+          c++ -std=c++17 -O2 -Ibuild/stockless-src/src tests/search_policy_test.cpp -o build/policy-test
+          build/policy-test
+          c++ -std=c++17 -O2 -ffunction-sections -fdata-sections -Wl,--gc-sections \
+            -Ibuild/stockless-src/src tests/threat_signal_test.cpp \
+            build/stockless-src/src/position.cpp build/stockless-src/src/attacks.cpp \
+            build/stockless-src/src/bitboard.cpp -o build/threat-test
+          build/threat-test
+      - name: Compile both releases using the same compiler and ISA
+        run: |
+          make -C build/stockless-src/src -j4 build ARCH=x86-64-avx2
+          cp build/stockless-src/src/*.nnue build/maintenance-baseline/build/stockless-src/src/
+          make -C build/maintenance-baseline/build/stockless-src/src -j4 build ARCH=x86-64-avx2
+      - name: Verify UCI lifecycle and complete search fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=build/maintenance-baseline/build/stockless-src/src/stockless
+          CANDIDATE=build/stockless-src/src/stockless
+          python tests/uci_lean_smoke.py "$CANDIDATE" | tee build/maintenance-evidence/uci-smoke.txt
+          python tools/compare_lean_policy_profiles.py "$BASE" "$CANDIDATE" --depth 9 \
+            | tee build/maintenance-evidence/search-equivalence.txt
+          python tools/compare_bench.py "$BASE" "$CANDIDATE" --depth 11 --rounds 2 \
+            | tee build/maintenance-evidence/bench-comparison.txt
+          sha256sum "$BASE" "$CANDIDATE" > build/maintenance-evidence/checked-binaries.sha256
+          g++ --version > build/maintenance-evidence/compiler.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockless-maintenance-evidence
+          path: build/maintenance-evidence/
+          if-no-files-found: error
+
+  packages:
+    needs: regression
+    permissions:
+      contents: write
+    # Pull requests already run the universal workflow directly. A main-branch
+    # publication rebuilds everything at its exact, verified source commit.
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/universal-release.yml
+    with:
+      publish_validated: false
+
+  publish:
+    needs: [regression, packages]
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'gaong5247-cmd/Stockless'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read release version
+        id: version
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'tools')
+          from package_release import read_version
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={read_version()}\n')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stockless-${{ steps.version.outputs.version }}-*
+          path: release-assets
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: stockless-maintenance-evidence
+          path: maintenance-evidence
+      - name: Check source identity and all seven platform packages
+        run: |
+          python tools/verify_release_assets.py release-assets --expected-commit "$GITHUB_SHA"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          plan = json.loads(Path('release/maintenance.json').read_text())
+          report = json.loads(Path('maintenance-evidence/maintenance-report.json').read_text())
+          assert report['candidate_commit'] == os.environ['GITHUB_SHA']
+          assert report['version'] == plan['version']
+          assert report['tag'] == plan['tag']
+          assert report['baseline_commit'] == plan['baseline_commit']
+          assert report['runtime_source_equivalent'] is True
+          assert report['playing_strength_claim'] is False
+          assert plan['playing_strength_claim'] is False
+          notes = Path(plan['notes']).read_text()
+          run_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          notes += f"\n## Publication verification\n\nSource: `{os.environ['GITHUB_SHA']}`. [Build and regression results]({run_url}).\n"
+          notes += '\nAll seven platform archives were checked for version, source identity, branding paths and binary SHA-256. '
+          notes += 'Linux and Windows execute UCI/bench tests; Android packages receive ELF/ABI checks and are not device-tested. '
+          notes += 'The attached evidence is a compatibility/regression record, not a new playing-strength estimate.\n'
+          Path('release-notes.md').write_text(notes)
+          PY
+          cp maintenance-evidence/maintenance-report.json release-assets/
+          cp maintenance-evidence/search-equivalence.txt release-assets/
+          cp maintenance-evidence/uci-smoke.txt release-assets/
+          (cd release-assets && sha256sum *.zip > SHA256SUMS.txt)
+      - name: Publish a new maintenance release without overwriting existing tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION='${{ steps.version.outputs.version }}'
+          TAG="Stockless_$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite it" >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; refusing to reuse it" >&2
+            exit 1
+          fi
+          gh release create "$TAG" release-assets/*.zip release-assets/SHA256SUMS.txt \
+            release-assets/maintenance-report.json release-assets/search-equivalence.txt \
+            release-assets/uci-smoke.txt --target "$GITHUB_SHA" \
+            --title "Stockless $VERSION — build reliability and release validation" \
+            --notes-file release-notes.md --latest
+          gh release view "$TAG" --json url,tagName,assets

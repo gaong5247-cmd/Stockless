@@ -5,7 +5,7 @@
 
 namespace Stockfish::Stockless {
 
-inline constexpr const char* Version = "v0.9.0";
+inline constexpr const char* Version = "v0.9.1";
 
 #if defined(__ANDROID__)
 inline constexpr bool DefaultMobileProfile = true;
