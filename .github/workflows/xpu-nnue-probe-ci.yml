@@ -1,0 +1,52 @@
+name: Experimental XPU NNUE format and native probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/xpu_nnue/**'
+      - 'tests/test_xpu_nnue_net_format.py'
+      - '.github/workflows/xpu-nnue-probe-ci.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check byte-preserving .nnue writer
+        run: python tests/test_xpu_nnue_net_format.py
+      - name: Materialize pinned Stockfish and install native feature probe
+        run: |
+          python tools/materialize.py
+          python tools/xpu_nnue/patch_probe.py
+      - name: Compile original Stockfish NNUE with read-only probe
+        run: make -C build/stockless-src/src -j2 build ARCH=x86-64
+      - name: Smoke test feature probe and actual NNUE export
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd build/stockless-src/src
+          printf 'uci\nisready\nposition startpos\nstockless_features\nquit\n' | ./stockless | tee /tmp/stockless-probe.log
+          grep -E '^stockless_features [0-7] ' /tmp/stockless-probe.log
+          NET=$(find . -maxdepth 1 -name '*.nnue' | head -1)
+          test -n "$NET"
+          NET="$(realpath "$NET")"
+          export NET
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, os.path.abspath('../../../tools/xpu_nnue'))
+          from net_format import base_weights, write_final_layers
+          net = os.environ['NET']
+          bias, weight = base_weights(net)
+          weight[0][0] = max(-128, min(127, weight[0][0] + 1))
+          write_final_layers(net, '/tmp/stockless-test.nnue', bias, weight)
+          PY
+          printf 'uci\nsetoption name EvalFile value /tmp/stockless-test.nnue\nisready\nposition startpos\ngo depth 2\nwait\nquit\n' | ./stockless | tee /tmp/stockless-newnet.log
+          grep 'NNUE evaluation using /tmp/stockless-test.nnue' /tmp/stockless-newnet.log
